@@ -1,0 +1,40 @@
+From 322a9147ce45a0e5f1615cb113ac36ddf418020d Mon Sep 17 00:00:00 2001
+From: Bing Deng <bing.deng@intel.com>
+Date: Fri, 20 Dec 2019 13:31:55 +0800
+Subject: [PATCH 2/2] Enable vitrual GPS on cic_dev.
+
+Change-Id: I892962cc8e55e3ab61b08f16d5e6a9decd4acc47
+Tracked-On:
+Signed-off-by: Bing Deng <bing.deng@intel.com>
+---
+ cic_dev/cic_dev.mk | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/cic_dev/cic_dev.mk b/cic_dev/cic_dev.mk
+index 8abd63a..605d6ee 100644
+--- a/cic_dev/cic_dev.mk
++++ b/cic_dev/cic_dev.mk
+@@ -20,6 +20,7 @@ TARGET_AIC_PERF := true
+ 
+ PRODUCT_COPY_FILES += \
+     frameworks/native/data/etc/android.hardware.opengles.aep.xml:system/vendor/etc/permissions/android.hardware.opengles.aep.xml \
++    frameworks/native/data/etc/android.hardware.location.gps.xml:system/vendor/etc/permissions/android.hardware.location.gps.xml \
+     frameworks/native/data/etc/android.hardware.usb.accessory.xml:system/etc/permissions/android.hardware.usb.accessory.xml \
+     frameworks/native/data/etc/android.hardware.usb.host.xml:system/etc/permissions/android.hardware.usb.host.xml \
+     device/intel/cic/common/media_codecs.xml:system/vendor/etc/media_codecs.xml \
+@@ -53,7 +54,11 @@ PRODUCT_PACKAGES += \
+     audio.primary.$(TARGET_PRODUCT) \
+     libsync \
+     Browser2 \
+-    auto_start_apk.sh
++    auto_start_apk.sh \
++    gps.$(TARGET_PRODUCT)
++
++PRODUCT_PACKAGES += android.hardware.gnss@1.0-service \
++    android.hardware.gnss@1.0-impl
+ 
+ ifeq ($(TARGET_USE_INTEL_HWCOMPOSER), true)
+ PRODUCT_PACKAGES += libva
+-- 
+2.17.1
+
