@@ -379,7 +379,7 @@ int main(int argc, char *argv[])
     while (flag)
     {
         memset(str, 0, sizeof(str));
-        printf("Please input comand('quit' for quit):");
+        printf("Please input command('quit' for quit):");
         scanf("%s", str);
         if (strcmp(str, "quit") == 0)
         {
