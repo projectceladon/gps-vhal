@@ -1,0 +1,36 @@
+From 8c23f3213c36b1388fd22c7c2bfddec17dd90fe5 Mon Sep 17 00:00:00 2001
+From: Bing Deng <bing.deng@intel.com>
+Date: Sat, 14 Dec 2019 23:08:10 +0800
+Subject: [PATCH] Enable virtual audio on cic_cloud.
+
+Change-Id: I20c1500a8697765d3451a64fcf9e0940aec265ff
+Tracked-On:
+Signed-off-by: Bing Deng <bing.deng@intel.com>
+---
+ cic_cloud/cic_cloud.mk | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/cic_cloud/cic_cloud.mk b/cic_cloud/cic_cloud.mk
+index 39f0068..070ab73 100755
+--- a/cic_cloud/cic_cloud.mk
++++ b/cic_cloud/cic_cloud.mk
+@@ -15,6 +15,7 @@
+ $(call inherit-product,device/intel/cic/common/device.mk)
+ 
+ TARGET_USE_GRALLOC_VHAL := true
++TARGET_USE_AUDIO_VHAL := true
+ TARGET_AIC_DEVICE_INPUT_FILTER := true
+ TARGET_AIC_PERF := true
+ TARGET_AIC_MEMORY_OPT := true;
+@@ -36,7 +37,7 @@ PRODUCT_PACKAGES += \
+     libEGL_swiftshader \
+     libGLESv1_CM_swiftshader \
+     libGLESv2_swiftshader \
+-    audio.r_submix.default \
++    audio.primary.$(TARGET_PRODUCT) \
+     Browser2
+ 
+ ifeq ($(TARGET_USE_GRALLOC_VHAL), true)
+-- 
+2.17.1
+
