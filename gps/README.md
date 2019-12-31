@@ -8,6 +8,7 @@ cmake ../
 make
 ```
 5. Usage:
+```shell
 		binlyd@binlyd[17:26:03]:/work/haas/local_render_gps$ ./host_gps_client -h
 		./host_gps_client
 		        -l, --lat lat
@@ -24,4 +25,5 @@ make
 		        3. quit
 		                Please input command('quit' for quit):quit
 		                The command is : quit
+```
 6. Contact me: bing.deng@intel.com
