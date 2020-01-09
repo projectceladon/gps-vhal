@@ -57,7 +57,7 @@ static int connect_gps_server()
         sock_client_fd = -1;
         return -1;
     }
-    printf("Connect GPS server sucessfully.\n");
+    printf("Connect GPS server successfully.\n");
     return sock_client_fd;
 }
 
@@ -70,7 +70,7 @@ static int send_message(const char *sentence, size_t n)
         printf("Write %zd %s to GPS socket(%d). \n", n, sentence, global_sock_client_fd);
         ret = write(global_sock_client_fd, sentence, n);
     } while (ret < 0 && errno == EINTR);
-    printf("%d is writen to GPS server.\n", ret);
+    printf("%d is written to GPS server.\n", ret);
     return ret;
 }
 
