@@ -23,6 +23,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/un.h>
+#include <sys/time.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,34 +31,39 @@
 #include <errno.h>
 #include <getopt.h>
 #include <pthread.h>
+#include <string.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #define S_SIZE 1024
 static int global_sock_client_fd;
+char server_ip[20] = "172.17.0.1";
+int port = 8766;
 
 static int connect_gps_server()
 {
-    const char *k_sock = "./workdir/ipc/gps-sock0";
-    struct sockaddr_un addr;
-    int sock_client_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    struct sockaddr_in addr;
+    int sock_client_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (sock_client_fd < 0)
     {
         printf("Can't create socket\n");
         return -1;
     }
 
-    memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    strncpy(&addr.sun_path[0], k_sock, strlen(k_sock));
+    memset(&addr, 0, sizeof(struct sockaddr_in));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    inet_pton(AF_INET, server_ip, &addr.sin_addr);
+
     if (connect(sock_client_fd, (struct sockaddr *)&addr,
-                sizeof(sa_family_t) + strlen(k_sock) + 1) < 0)
+                sizeof(struct sockaddr_in)) < 0)
     {
-        printf("Can't connect to remote\n");
-        perror("Failed to connect to serversock\n");
+        printf("Failed to connect to serversock %s:%d error: %s\n", server_ip, port, strerror(errno));
         close(sock_client_fd);
         sock_client_fd = -1;
         return -1;
     }
-    printf("Connect GPS server successfully.\n");
+    printf("Connect GPS server successfully(%s:%d).\n", server_ip, port);
     return sock_client_fd;
 }
 
@@ -275,13 +281,15 @@ do_geo_fix(char *args)
     return 0;
 }
 
-char *const short_options = "l:o:a:c:h";
+char *const short_options = "l:o:a:c:hs:p:";
 struct option long_options[] = {
     {"lat", 0, NULL, 'l'},
     {"long", 1, NULL, 'o'},
     {"alt", 1, NULL, 'a'},
     {"count", 1, NULL, 'c'},
     {"help", 1, NULL, 'h'},
+    {"server-ip", 1, NULL, 's'},
+    {"port", 1, NULL, 'p'},
     {0, 0, 0, 0},
 };
 
@@ -290,6 +298,7 @@ double gps_long = 31.07147;
 double gps_alt = 4;
 int gps_count = 10000;
 int loop_exit = 1;
+
 void *injection_gps_data(void *args)
 {
     int count = 0;
@@ -317,17 +326,18 @@ void *injection_gps_data(void *args)
         }
         lat_long_len = sprintf(lat_long, "%.5f %.5f %.1f 5 6", gps_lat, gps_long, gps_alt);
         lat_long[lat_long_len] = '\0';
-        printf("GPS 1HZ. Sleep 1s.\n");
+        printf("\tGPS 1HZ. Sleep 1s.\n");
         sleep(1);
-        printf("Execute command(count:%d): geo fix %s\n", count, lat_long);
+        printf("\tExecute command(count:%d): geo fix %s\n", count, lat_long);
         do_geo_fix(lat_long);
         if (loop_exit)
         {
-            printf("%s exit\n", __func__);
+            printf("\t%s exit\n", __func__);
             break;
         }
     }
     loop_exit = 1;
+    return NULL;
 }
 int main(int argc, char *argv[])
 {
@@ -359,13 +369,24 @@ int main(int argc, char *argv[])
             gps_count = atoi(p_opt_arg);
             printf("gps_count = %d\n", gps_count);
             break;
+        case 's':
+            p_opt_arg = optarg;
+            strncpy(server_ip, p_opt_arg, sizeof(server_ip));
+            printf("Set server_ip to %s\n", server_ip);
+            break;
+        case 'p':
+            p_opt_arg = optarg;
+            port = atoi(p_opt_arg);
+            printf("Set port to %d\n", port);
+            break;
         case 'h':
-            printf("%s\n\
-            \t-l, --lat lat\n\
-            \t-o, --long long\n\
-            \t-a, --alt alt\n\
-            \t-c, --count count\n\
-            \t-h, --help help\n",
+            printf("%s\n"
+                   "\t-l, --lat lat\n"
+                   "\t-o, --long long\n"
+                   "\t-a, --alt alt\n"
+                   "\t-c, --count count\n"
+                   "\t-h, --help help\n"
+                   "\t-s, --server-ip server-ip\n",
                    argv[0]);
             break;
         default:
@@ -375,6 +396,7 @@ int main(int argc, char *argv[])
 
     char str[1024];
     int flag = 1;
+    printf("server_ip = %s port = %d\n", server_ip, port);
 
     while (flag)
     {
@@ -392,14 +414,16 @@ int main(int argc, char *argv[])
             global_sock_client_fd = connect_gps_server();
             if (global_sock_client_fd < 0)
             {
-                printf("Fail to connect GPS server.\n");
+                printf("Fail to connect GPS server(%s:%d).\n", server_ip, port);
                 continue;
             }
             if (loop_exit == 1)
             {
                 pthread_t thread_id;
                 pthread_create(&thread_id, NULL, injection_gps_data, NULL);
-            } else {
+            }
+            else
+            {
                 printf("injection_gps_data thread is running\n");
             }
         }
