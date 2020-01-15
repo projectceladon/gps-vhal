@@ -22,7 +22,7 @@
  * which is itself called from android_location_GpsLocationProvider.cpp
  */
 
-#define LOG_NDEBUG 0
+// #define LOG_NDEBUG 0
 #include <errno.h>
 #include <pthread.h>
 #include <fcntl.h>
@@ -41,7 +41,7 @@
 #include <cutils/properties.h>
 #include <sys/system_properties.h>
 
-#define GPS_DEBUG 1
+// #define GPS_DEBUG 1
 
 #undef D
 #if GPS_DEBUG
@@ -620,10 +620,11 @@ typedef struct
     pthread_t thread;
     int control[2];
     pthread_t gps_socket_server_tid;
-    bool gsst_loop_exit; //gsst gps socket server thread
+    int gps_socket_server_fd;
+    bool gsst_loop_exit; // gps socket server thread loop exit
     int epoll_fd;
-    int container_id;
-    char gps_sock_file[128];
+    int tcp_port; // virtual gps tcp port
+    int need_notify_client_start;
 } GpsState;
 
 static GpsState _gps_state[1];
@@ -637,13 +638,31 @@ gps_state_done(GpsState *s)
     write(s->control[0], &cmd, 1);
     pthread_join(s->thread, &dummy);
 
+    int ret = 0;
+    if (s->fd > 0)
+    {
+        do
+        {
+            ret = write(s->fd, &cmd, 1);
+        } while (ret < 0 && errno == EINTR);
+        if (ret != 1)
+            D("%s: could not notify client(%d) to quit: ret=%d: %s",
+              __FUNCTION__, s->fd, ret, strerror(errno));
+        else
+            ALOGV("%s Notify client(%d) to quit", __func__, s->fd);
+    }
+    s->gsst_loop_exit = 1;
+    shutdown(s->gps_socket_server_fd, SHUT_RDWR);
+    pthread_join(s->gps_socket_server_tid, &dummy);
+
     // close the control socket pair
     close(s->control[0]);
     s->control[0] = -1;
     close(s->control[1]);
     s->control[1] = -1;
 
-    // close connection to the QEMU GPS daemon
+    // close connection to the GPS daemon
+    shutdown(s->fd, SHUT_RDWR);
     close(s->fd);
     s->fd = -1;
     s->init = 0;
@@ -654,6 +673,19 @@ gps_state_start(GpsState *s)
 {
     char cmd = CMD_START;
     int ret;
+    if (s->fd > 0)
+    {
+        do
+        {
+            ret = write(s->fd, &cmd, 1);
+        } while (ret < 0 && errno == EINTR);
+        if (ret != 1)
+            D("%s: could not notify client(%d) to start: ret=%d: %s",
+              __FUNCTION__, s->fd, ret, strerror(errno));
+        else
+            ALOGV("%s Notify client(%d) to start", __func__, s->fd);
+    }
+    s->need_notify_client_start = 1;
 
     do
     {
@@ -670,6 +702,21 @@ gps_state_stop(GpsState *s)
 {
     char cmd = CMD_STOP;
     int ret;
+
+    if (s->fd > 0)
+    {
+        do
+        {
+            ret = write(s->fd, &cmd, 1);
+        } while (ret < 0 && errno == EINTR);
+
+        if (ret != 1)
+            D("%s: could not notify client(%d) to stop: ret=%d: %s",
+              __FUNCTION__, s->fd, ret, strerror(errno));
+        else
+            ALOGV("%s Notify client(%d) to stop", __func__, s->fd);
+    }
+    s->need_notify_client_start = 0;
 
     do
     {
@@ -712,7 +759,7 @@ epoll_deregister(int epoll_fd, int fd)
 }
 
 /* this is the main thread, it waits for commands from gps_state_start/stop and,
- * when started, messages from the QEMU GPS daemon. these are simple NMEA sentences
+ * when started, messages from the GPS daemon. these are simple NMEA sentences
  * that must be parsed to be converted into GPS fixes sent to the framework
  */
 static void
@@ -728,7 +775,7 @@ gps_state_thread(void *arg)
     else
     {
         state->epoll_fd = epoll_fd;
-        ALOGE("%s Set state->epoll_fd = %d.", __func__, state->epoll_fd);
+        ALOGD("%s Set state->epoll_fd = %d.", __func__, state->epoll_fd);
     }
     int started = 0;
     int control_fd = state->control[1];
@@ -816,7 +863,6 @@ gps_state_thread(void *arg)
                     if (cmd == CMD_QUIT)
                     {
                         D("gps thread quitting on demand");
-                        state->gsst_loop_exit = 1;
                         return;
                     }
                     else if (cmd == CMD_START)
@@ -865,6 +911,13 @@ gps_state_thread(void *arg)
                                 ALOGE("error while reading from gps daemon socket: %s:", strerror(errno));
                             break;
                         }
+                        if (ret == 0)
+                        {
+                            ALOGE("%s:%d GPS socket client may close. Deregister s->fd and set it to -1 and let client to reconnect.", __func__, __LINE__);
+                            epoll_deregister(state->epoll_fd, state->fd);
+                            state->fd = -1;
+                            break;
+                        }
                         D("received %d bytes: %.*s", ret, ret, buff);
                         for (nn = 0; nn < ret; nn++)
                             nmea_reader_addc(reader, buff[nn]);
@@ -884,52 +937,29 @@ static void gps_socket_server_thread(void *arg)
 {
     GpsState *state = (GpsState *)arg;
     int ret = 0;
-    unsigned long long heart_beat_count = 0;
     ALOGV("Constructing GPS socket server...");
-    int gps_server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (gps_server_fd < 0)
+    state->gps_socket_server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (state->gps_socket_server_fd < 0)
     {
         ALOGE("%s:%d Fail to construct tcp socket with error: %s",
               __func__, __LINE__, strerror(errno));
         return;
     }
 
-    struct sockaddr_un addr;
+    struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    strncpy(&addr.sun_path[0], state->gps_sock_file, strlen(state->gps_sock_file));
-    if ((access(state->gps_sock_file, F_OK)) != -1)
-    {
-        ALOGW("%s GPS socket file is %s", __func__, state->gps_sock_file);
-        ret = unlink(state->gps_sock_file);
-        if (ret < 0)
-        {
-            ALOGW("%s Failed to unlink server socket address %d, %s", __func__, ret, strerror(errno));
-            return;
-        }
-    }
-    else
-    {
-        ALOGW("%s GPS socket file %s will created. ", __func__, state->gps_sock_file);
-    }
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons(state->tcp_port);
 
-    ret = bind(gps_server_fd, (struct sockaddr *)&addr, sizeof(sa_family_t) + strlen(state->gps_sock_file) + 1);
+    ret = bind(state->gps_socket_server_fd, (struct sockaddr *)&addr, sizeof(struct sockaddr_in));
     if (ret < 0)
     {
         ALOGE("%s Failed to bind server socket address %d, %s", __func__, ret, strerror(errno));
         return;
     }
 
-    struct stat st;
-    __mode_t mod = S_IRWXU | S_IRWXG | S_IRWXO;
-    if (fstat(gps_server_fd, &st) == 0)
-    {
-        mod |= st.st_mode;
-    }
-    chmod(state->gps_sock_file, mod);
-    stat(state->gps_sock_file, &st);
-
-    ret = listen(gps_server_fd, 5);
+    ret = listen(state->gps_socket_server_fd, 5);
     if (ret < 0)
     {
         ALOGE("%s Failed to listen on server socket", __func__);
@@ -938,31 +968,45 @@ static void gps_socket_server_thread(void *arg)
 
     while (!state->gsst_loop_exit)
     {
-        socklen_t alen = sizeof(struct sockaddr_un);
-        if (state->fd > 0)
+        socklen_t alen = sizeof(struct sockaddr_in);
+        ALOGV("%s Wait a GPS client to connect...", __func__);
+        state->fd = accept(state->gps_socket_server_fd, (struct sockaddr *)&addr, &alen);
+        if (state->fd != -1)
         {
-            if (heart_beat_count++ % 60 == 0)
-            {
-                ALOGV("%s Heartbeat: GPS server has connected to clinet(state->fd): %d. Sleep 1s. This log print each 60 times.", __func__, state->fd);
-            }
-            sleep(1);
-        }
-        else
-        {
-            ALOGV("%s Wait a GPS client to connect...", __func__);
-            state->fd = accept(gps_server_fd, (struct sockaddr *)&addr, &alen);
             ALOGV("%s A GPS client connected to server. state->fd = %d", __func__, state->fd);
             if (state->epoll_fd > 0)
             {
                 ALOGV("%s register state->fd(%d) to state->epoll_fd(%d)", __func__, state->fd, state->epoll_fd);
                 epoll_register(state->epoll_fd, state->fd);
             }
+
+            //Android already triggered start command. Notify client to start when it connect to server.
+            if (state->need_notify_client_start)
+            {
+                ALOGV("%s Android already triggered start command. Notify client to start when it connect to server.", __func__);
+                char cmd = CMD_START;
+                do
+                {
+                    ret = write(state->fd, &cmd, 1);
+                } while (ret < 0 && errno == EINTR);
+                if (ret != 1)
+                    D("%s: could not notify client(%d) to start: ret=%d: %s",
+                      __FUNCTION__, state->fd, ret, strerror(errno));
+                else
+                    ALOGV("%s Notify client(%d) to start", __func__, state->fd);
+            }
+        }
+        else
+        {
+            ALOGV("%s GPS socket server maybe shutdown as quit command is got. "
+                  "Or else, error happen. state->fd = %d %s.",
+                  __func__, state->fd, strerror(errno));
         }
     }
     close(state->fd);
     state->fd = -1;
-    close(gps_server_fd);
-    gps_server_fd = -1;
+    close(state->gps_socket_server_fd);
+    state->gps_socket_server_fd = -1;
     ALOGV("%s Quit", __func__);
     return;
 }
@@ -975,18 +1019,17 @@ gps_state_init(GpsState *state, GpsCallbacks *callbacks)
     state->control[1] = -1;
     state->fd = -1;
     state->gsst_loop_exit = 0;
+    state->gps_socket_server_fd = -1;
 
-    state->container_id = 0;
+    state->tcp_port = 8766;
     char buf[PROPERTY_VALUE_MAX] = {
         '\0',
     };
-
-    if (property_get("ro.container.id", buf, "") > 0)
+    if (property_get("virtual.gps.tcp.port", buf, "") > 0)
     {
-        state->container_id = atoi(buf);
+        state->tcp_port = atoi(buf);
     }
-    memset(state->gps_sock_file, '\0', 128);
-    snprintf(state->gps_sock_file, 128, "%s%d", "/ipc/gps-sock", state->container_id);
+    state->need_notify_client_start = 0;
 
     state->gps_socket_server_tid = callbacks->create_thread_cb("gps_socket_server_thread", gps_socket_server_thread, state);
 
@@ -996,7 +1039,7 @@ gps_state_init(GpsState *state, GpsCallbacks *callbacks)
         goto Fail;
     }
 
-    D("Virtual gps will read from '%s'", state->gps_sock_file);
+    D("Virtual gps will read with port '%d'", state->tcp_port);
 
     if (socketpair(AF_LOCAL, SOCK_STREAM, 0, state->control) < 0)
     {
