@@ -2,7 +2,7 @@ cmake_minimum_required( VERSION 2.8 )
 set(CMAKE_SYSTEM_NAME Linux )
 
 SET (CMAKE_C_COMPILER             "/usr/bin/clang")
-SET (CMAKE_C_FLAGS                "-Wall -std=c99")
+SET (CMAKE_C_FLAGS                "-Wall")
 SET (CMAKE_C_FLAGS_DEBUG          "-g")
 SET (CMAKE_C_FLAGS_MINSIZEREL     "-Os -DNDEBUG")
 SET (CMAKE_C_FLAGS_RELEASE        "-O4 -DNDEBUG")

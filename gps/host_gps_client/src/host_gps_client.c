@@ -130,7 +130,8 @@ int main(int argc, char *argv[])
                    "\t-a, --alt alt\n"
                    "\t-c, --count count\n"
                    "\t-h, --help help\n"
-                   "\t-s, --server-ip server-ip\n",
+                   "\t-s, --server-ip server-ip\n"
+                   "\t-p, --port\n",
                    argv[0]);
             break;
         default:
@@ -340,6 +341,7 @@ Fail:
     close(gsi->epoll_fd);
     gsi->epoll_fd = -1;
     pthread_join(gsi->injection_thread_id, NULL);
+    printf("%s Quit\n", __func__);
     return NULL;
 }
 
@@ -361,7 +363,7 @@ static int connect_gps_server(GpsSocketInfo *gsi)
     if (connect(gsi->sock_client_fd, (struct sockaddr *)&addr,
                 sizeof(struct sockaddr_in)) < 0)
     {
-        printf("Failed to connect to serversock %s:%d error: %s\n", gsi->server_ip, gsi->port, strerror(errno));
+        printf("Failed to connect to server socket %s:%d error: %s\n", gsi->server_ip, gsi->port, strerror(errno));
         close(gsi->sock_client_fd);
         gsi->sock_client_fd = -1;
         return -1;
