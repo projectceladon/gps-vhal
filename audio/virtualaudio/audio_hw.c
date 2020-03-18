@@ -950,6 +950,10 @@ static int adev_open(const hw_module_t *module, const char *name,
 {
     ALOGV("adev_open: %s", name);
 
+    //It will generate SIGPIPE when write to a closed socket, which will kill
+    //the process. Ignore the signal SIGPIPE to avoid the process crash.
+    signal(SIGPIPE, SIG_IGN);
+
     struct stub_audio_device *adev;
 
     if (strcmp(name, AUDIO_HARDWARE_INTERFACE) != 0)
