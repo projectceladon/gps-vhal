@@ -25,7 +25,7 @@
 
     <!-- Navigation Drawer -->
     <string name="navdrawer_separator_assist_data">Modificar datos de asistencia</string>
-    <string name="force_xtra_injection">Insertar datos XTRA</string>
+    <string name="force_psds_injection">Insertar datos PSDS</string>
     <string name="force_time_injection">Insertar datos de tiempo</string>
     <string name="delete_aiding_data">Borrar datos de asistencia</string>
     <string name="navdrawer_item_settings">Ajustes</string>
@@ -47,8 +47,8 @@
     <string name="force_time_injection_success">Datos de tiempo insertados correctamente</string>
     <string name="force_time_injection_failure">El dispositivo no permite insertar los datos de tiempo</string>
 
-    <string name="force_xtra_injection_success">Datos XTRA insertados correctamente</string>
-    <string name="force_xtra_injection_failure">El dispositivo no permite insertar los datos XTRA</string>
+    <string name="force_psds_injection_success">Datos PSDS insertados correctamente</string>
+    <string name="force_psds_injection_failure">El dispositivo no permite insertar los datos PSDS</string>
 
     <string name="zoom_in">Ampliar Vista</string>
     <string name="zoom_out">Reducir Vista</string>
@@ -61,7 +61,6 @@
     <string name="gps_ttff_label">TTFF:</string>
     <string name="gps_altitude_label">Alt:</string>
     <string name="gps_altitude_msl_label">Alt (MSL):</string>
-    <string name="gps_accuracy_label">E Acc:</string>
     <string name="gps_hor_and_vert_accuracy_label">E H/V Acc:</string>
     <string name="gps_speed_label">Velocidad:</string>
     <string name="gps_speed_acc_label">S. Acc:</string>
@@ -93,7 +92,6 @@
     <string name="gnss_not_available">Satélites del sistema global de navegación (GNSS) no disponibles</string>
     <string name="sbas_not_available">Satélites del sistema de aumento basado en satélites (SBAS) no disponibles</string>
     <string name="menu_option_sort_by">Ordenar por</string>
-
     <!-- Map view -->
     <string name="ground_truth_latitude">Su latitud</string>
     <string name="ground_truth_longitude">Su longitud</string>

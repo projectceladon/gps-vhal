@@ -77,12 +77,12 @@ import androidx.fragment.app.FragmentManager;
 
 import com.android.gpstest.io.FileLogger;
 import com.android.gpstest.map.MapConstants;
-import com.android.gpstest.util.GpsTestUtil;
 import com.android.gpstest.util.IOUtils;
 import com.android.gpstest.util.LocationUtils;
 import com.android.gpstest.util.MathUtils;
 import com.android.gpstest.util.PermissionUtils;
 import com.android.gpstest.util.PreferenceUtils;
+import com.android.gpstest.util.SatelliteUtils;
 import com.android.gpstest.util.UIUtils;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
@@ -92,17 +92,17 @@ import java.util.ArrayList;
 import static com.android.gpstest.NavigationDrawerFragment.NAVDRAWER_ITEM_ACCURACY;
 import static com.android.gpstest.NavigationDrawerFragment.NAVDRAWER_ITEM_CLEAR_AIDING_DATA;
 import static com.android.gpstest.NavigationDrawerFragment.NAVDRAWER_ITEM_HELP;
+import static com.android.gpstest.NavigationDrawerFragment.NAVDRAWER_ITEM_INJECT_PSDS_DATA;
 import static com.android.gpstest.NavigationDrawerFragment.NAVDRAWER_ITEM_INJECT_TIME_DATA;
-import static com.android.gpstest.NavigationDrawerFragment.NAVDRAWER_ITEM_INJECT_XTRA_DATA;
 import static com.android.gpstest.NavigationDrawerFragment.NAVDRAWER_ITEM_MAP;
 import static com.android.gpstest.NavigationDrawerFragment.NAVDRAWER_ITEM_OPEN_SOURCE;
 import static com.android.gpstest.NavigationDrawerFragment.NAVDRAWER_ITEM_SEND_FEEDBACK;
 import static com.android.gpstest.NavigationDrawerFragment.NAVDRAWER_ITEM_SETTINGS;
 import static com.android.gpstest.NavigationDrawerFragment.NAVDRAWER_ITEM_SKY;
 import static com.android.gpstest.NavigationDrawerFragment.NAVDRAWER_ITEM_STATUS;
-import static com.android.gpstest.util.GpsTestUtil.writeGnssMeasurementToAndroidStudio;
-import static com.android.gpstest.util.GpsTestUtil.writeNavMessageToAndroidStudio;
-import static com.android.gpstest.util.GpsTestUtil.writeNmeaToAndroidStudio;
+import static com.android.gpstest.util.IOUtils.writeGnssMeasurementToAndroidStudio;
+import static com.android.gpstest.util.IOUtils.writeNavMessageToAndroidStudio;
+import static com.android.gpstest.util.IOUtils.writeNmeaToAndroidStudio;
 
 public class GpsTestActivity extends AppCompatActivity
         implements LocationListener, SensorEventListener, NavigationDrawerFragment.NavigationDrawerCallbacks {
@@ -263,7 +263,7 @@ public class GpsTestActivity extends AppCompatActivity
 
         // If we have a large screen, show all the fragments in one layout
         // TODO - Fix large screen layouts (see #122)
-//        if (GpsTestUtil.isLargeScreen(this)) {
+//        if (SatelliteUtils.isLargeScreen(this)) {
 //            setContentView(R.layout.activity_main_large_screen);
 //            mIsLargeScreen = true;
 //        } else {
@@ -351,12 +351,14 @@ public class GpsTestActivity extends AppCompatActivity
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == UIUtils.PICKFILE_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
             // User picked a file to share from the Share dialog - update the dialog
             if (data != null) {
                 Uri uri = data.getData();
                 Log.i(TAG, "Uri: " + uri.toString());
-                UIUtils.createShareDialog(this, mLastLocation, isFileLoggingEnabled(), mFileLogger, uri).show();
+                final Location location = mLastLocation;
+                UIUtils.createShareDialog(this, location, isFileLoggingEnabled(), mFileLogger, uri).show();
             }
         } else {
             // See if this result was a scanned QR Code with a ground truth location
@@ -471,11 +473,11 @@ public class GpsTestActivity extends AppCompatActivity
         checkNmeaOutput(settings);
         checkLocationOutput(settings);
 
-        if (GpsTestUtil.isGnssStatusListenerSupported()) {
+        if (SatelliteUtils.isGnssStatusListenerSupported()) {
             checkGnssMeasurementOutput(settings);
         }
 
-        if (GpsTestUtil.isGnssStatusListenerSupported()) {
+        if (SatelliteUtils.isGnssStatusListenerSupported()) {
             checkNavMessageOutput(settings);
         }
 
@@ -497,10 +499,10 @@ public class GpsTestActivity extends AppCompatActivity
         // Remove status listeners
         removeStatusListener();
         removeNmeaListener();
-        if (GpsTestUtil.isGnssStatusListenerSupported()) {
+        if (SatelliteUtils.isGnssStatusListenerSupported()) {
             removeNavMessageListener();
         }
-        if (GpsTestUtil.isGnssStatusListenerSupported()) {
+        if (SatelliteUtils.isGnssStatusListenerSupported()) {
             removeGnssMeasurementsListener();
         }
         // Check if the user has chosen to stop GNSS whenever app is in background
@@ -575,8 +577,8 @@ public class GpsTestActivity extends AppCompatActivity
                     mCurrentNavDrawerPosition = item;
                 }
                 break;
-            case NAVDRAWER_ITEM_INJECT_XTRA_DATA:
-                forceXtraInjection();
+            case NAVDRAWER_ITEM_INJECT_PSDS_DATA:
+                forcePsdsInjection();
                 break;
             case NAVDRAWER_ITEM_INJECT_TIME_DATA:
                 forceTimeInjection();
@@ -788,16 +790,23 @@ public class GpsTestActivity extends AppCompatActivity
         }
     }
 
-    private void forceXtraInjection() {
-        boolean success = sendExtraCommand(getString(R.string.force_xtra_injection_command));
-        if (success) {
-            Toast.makeText(this, getString(R.string.force_xtra_injection_success),
-                    Toast.LENGTH_SHORT).show();
-            PreferenceUtils.saveInt(Application.get().getString(R.string.capability_key_inject_xtra), PreferenceUtils.CAPABILITY_SUPPORTED);
+    private void forcePsdsInjection() {
+        boolean success;
+        // FIXME - We should use the platform constant from Build.VERSION_CODES below, but we can't use compileSdkVersion 29 due to NMEA interface issue (https://github.com/barbeau/gpstest/issues/340)
+        if (Build.VERSION.SDK_INT >= 29) {
+            success = sendExtraCommand(getString(R.string.force_psds_injection_command));
         } else {
-            Toast.makeText(this, getString(R.string.force_xtra_injection_failure),
+            success = sendExtraCommand(getString(R.string.force_xtra_injection_command));
+        }
+
+        if (success) {
+            Toast.makeText(this, getString(R.string.force_psds_injection_success),
                     Toast.LENGTH_SHORT).show();
-            PreferenceUtils.saveInt(Application.get().getString(R.string.capability_key_inject_xtra), PreferenceUtils.CAPABILITY_NOT_SUPPORTED);
+            PreferenceUtils.saveInt(Application.get().getString(R.string.capability_key_inject_psds), PreferenceUtils.CAPABILITY_SUPPORTED);
+        } else {
+            Toast.makeText(this, getString(R.string.force_psds_injection_failure),
+                    Toast.LENGTH_SHORT).show();
+            PreferenceUtils.saveInt(Application.get().getString(R.string.capability_key_inject_psds), PreferenceUtils.CAPABILITY_NOT_SUPPORTED);
         }
     }
 
@@ -922,7 +931,7 @@ public class GpsTestActivity extends AppCompatActivity
     }
 
     private void addOrientationSensorListener() {
-        if (GpsTestUtil.isRotationVectorSensorSupported(this)) {
+        if (SatelliteUtils.isRotationVectorSensorSupported(this)) {
             // Use the modern rotation vector sensors
             Sensor vectorSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
             mSensorManager.registerListener(this, vectorSensor, 16000); // ~60hz
@@ -940,7 +949,7 @@ public class GpsTestActivity extends AppCompatActivity
         SharedPreferences settings = Application.getPrefs();
         boolean useGnssApis = settings.getBoolean(getString(R.string.pref_key_use_gnss_apis), true);
 
-        if (GpsTestUtil.isGnssStatusListenerSupported() && useGnssApis) {
+        if (SatelliteUtils.isGnssStatusListenerSupported() && useGnssApis) {
             addGnssStatusListener();
         } else {
             addLegacyStatusListener();
@@ -1071,7 +1080,7 @@ public class GpsTestActivity extends AppCompatActivity
         SharedPreferences settings = Application.getPrefs();
         boolean useGnssApis = settings.getBoolean(getString(R.string.pref_key_use_gnss_apis), true);
 
-        if (GpsTestUtil.isGnssStatusListenerSupported() && useGnssApis) {
+        if (SatelliteUtils.isGnssStatusListenerSupported() && useGnssApis) {
             removeGnssStatusListener();
         } else {
             removeLegacyStatusListener();
@@ -1099,7 +1108,7 @@ public class GpsTestActivity extends AppCompatActivity
     }
 
     private void addNmeaListener() {
-        if (GpsTestUtil.isGnssStatusListenerSupported()) {
+        if (SatelliteUtils.isGnssStatusListenerSupported()) {
             addNmeaListenerAndroidN();
         } else {
             addLegacyNmeaListener();
@@ -1149,7 +1158,7 @@ public class GpsTestActivity extends AppCompatActivity
     }
 
     private void removeNmeaListener() {
-        if (GpsTestUtil.isGnssStatusListenerSupported()) {
+        if (SatelliteUtils.isGnssStatusListenerSupported()) {
             if (mLocationManager != null && mOnNmeaMessageListener != null) {
                 mLocationManager.removeNmeaListener(mOnNmeaMessageListener);
             }
@@ -1526,7 +1535,8 @@ public class GpsTestActivity extends AppCompatActivity
     }
 
     private void share() {
-        UIUtils.createShareDialog(this, mLastLocation, isFileLoggingEnabled(), mFileLogger, null).show();
+        final Location location = mLastLocation;
+        UIUtils.createShareDialog(this, location, isFileLoggingEnabled(), mFileLogger, null).show();
     }
 
     /**

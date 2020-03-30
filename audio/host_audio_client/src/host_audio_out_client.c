@@ -49,17 +49,19 @@ typedef struct
     char save_pcm_file[64];
     struct audio_socket_configuration_info asci;
     int enable_socket_connect_log;
+    int data_block;
 
 } ClientAudioOutSocketInfo;
 
 static ClientAudioOutSocketInfo _caosi[1];
 
-char *const short_options = "hs:p:a:";
+char *const short_options = "hs:p:a:d";
 struct option long_options[] = {
     {"help", 1, NULL, 'h'},
     {"server-ip", 1, NULL, 's'},
     {"port", 1, NULL, 'p'},
     {"save-pcm-file", 1, NULL, 'a'},
+    {"data-block", 1, NULL, 'd'},
     {0, 0, 0, 0},
 };
 
@@ -79,6 +81,7 @@ int main(int argc, char *argv[])
     strncpy(_caosi->server_ip, "172.100.0.2", sizeof(_caosi->server_ip));
     _caosi->port = 8768;
     strncpy(_caosi->save_pcm_file, "audio_out.pcm", sizeof(_caosi->save_pcm_file));
+    _caosi->data_block = 0;
 
     while ((c = getopt_long(argc, argv, short_options, long_options, &index)) != -1)
     {
@@ -106,12 +109,18 @@ int main(int argc, char *argv[])
             strncpy(_caosi->save_pcm_file, p_opt_arg, sizeof(_caosi->save_pcm_file));
             printf("Set _caosi->save_pcm_file to %s\n", _caosi->save_pcm_file);
             break;
+        case 'd':
+            _caosi->data_block = 1;
+            printf("Enable _caosi->data_block\n");
+            break;
         default:
             printf("Enock: c = %c, index =%d \n", c, index);
         }
     }
 
-    printf("%s _caosi->server_ip = %s _caosi->port = %d _caosi->save_pcm_file: %s\n", __func__, _caosi->server_ip, _caosi->port, _caosi->save_pcm_file);
+    printf("%s _caosi->server_ip = %s _caosi->port = %d _caosi->save_pcm_file: %s"
+           "_caosi->data_block = %d\n",
+           __func__, _caosi->server_ip, _caosi->port, _caosi->save_pcm_file, _caosi->data_block);
 
     while (1)
     {
@@ -150,6 +159,16 @@ int main(int argc, char *argv[])
                 pthread_join(accept_thread_id, NULL);
                 accept_thread_flag = 0;
             };
+        }
+        if (strcmp(str, "dbe") == 0)
+        {
+            printf("%s dbe(data_block enable)\n", __func__);
+            _caosi->data_block = 1;
+        }
+        if (strcmp(str, "dbd") == 0)
+        {
+            printf("%s dbd(data_block disenable)\n", __func__);
+            _caosi->data_block = 0;
         }
     }
 
@@ -198,93 +217,103 @@ void *receive_server_command_thread(void *args)
         memset(&asi, 0, sizeof(struct audio_socket_info));
         len = sizeof(struct audio_socket_info);
         pointer = &asi;
-        while (len > 0 && caosi->loop_exit == 0)
+        if (caosi->data_block)
         {
-            do
-            {
-                ret = read(caosi->sock_client_fd, pointer, len);
-            } while (ret < 0 && errno == EINTR && caosi->loop_exit == 0);
-            if (ret == 0)
-            {
-                printf("%s:%d the audio out socket server may close.\n", __func__, __LINE__);
-                shutdown(caosi->sock_client_fd, SHUT_RDWR);
-                close(caosi->sock_client_fd);
-                caosi->sock_client_fd = -1;
-                break;
-            }
-            if (ret > 0)
-            {
-                pointer += ret;
-                len -= ret;
-            }
+            printf("%s emulate data block. Donnot receive data. Sleep 10 ms.\n", __func__);
+            usleep(10 * 1000);
         }
-
-        if (len == 0)
+        else
         {
-            if (asi.cmd == CMD_OPEN)
+            while (len > 0 && caosi->loop_exit == 0)
             {
-                printf("%s the audio out thread starting on demand\n", __func__);
-                caosi->asci.channel_mask = asi.asci.channel_mask;
-                caosi->asci.format = asi.asci.format;
-                caosi->asci.frame_count = asi.asci.frame_count;
-                caosi->asci.sample_rate = asi.asci.sample_rate;
-                printf("%s caosi->asci.channel_mask: %d caosi->asci.format: %d caosi->asci.frame_count: %d caosi->asci.sample_rate: %d\n",
-                       __func__, caosi->asci.channel_mask, caosi->asci.format, caosi->asci.frame_count, caosi->asci.sample_rate);
-                buffer_size = caosi->asci.frame_count * audio_channel_count_from_out_mask(caosi->asci.channel_mask) * audio_bytes_per_sample(caosi->asci.format);
-                printf("%s buffer_size: %zd\n", __func__, buffer_size);
                 do
                 {
-                    buffer = malloc(buffer_size);
-                } while (!buffer && caosi->loop_exit == 0);
-                if (!buffer)
+                    ret = read(caosi->sock_client_fd, pointer, len);
+                } while (ret < 0 && errno == EINTR && caosi->loop_exit == 0);
+                if (ret == 0)
                 {
-                    printf("%s buffer is NULL. Quit\n", __func__);
+                    printf("%s:%d the audio out socket server may close.\n", __func__, __LINE__);
+                    shutdown(caosi->sock_client_fd, SHUT_RDWR);
+                    close(caosi->sock_client_fd);
+                    caosi->sock_client_fd = -1;
                     break;
                 }
-            }
-            else if (asi.cmd == CMD_CLOSE)
-            {
-                printf("%s the audio out thread stopping on demand\n", __func__);
-                shutdown(caosi->sock_client_fd, SHUT_RDWR);
-                close(caosi->sock_client_fd);
-                caosi->sock_client_fd = -1;
-                continue;
-            }
-            else if (asi.cmd == CMD_DATA)
-            {
-                printf("%s asi.data_size: %d. Note that buffersize is %zd\n", __func__, asi.data_size, buffer_size);
-                if (asi.data_size > 0)
+                if (ret > 0)
                 {
-                    len = asi.data_size;
-                    pointer = buffer;
-                    while (len > 0 && caosi->loop_exit == 0)
-                    {
-                        do
-                        {
-                            ret = read(caosi->sock_client_fd, pointer, len);
-                        } while (ret < 0 && errno == EINTR && caosi->loop_exit == 0);
-                        if (ret == 0)
-                        {
-                            printf("%s:%d the audio out socket server may close(CMD_DATA).\n", __func__, __LINE__);
-                            shutdown(caosi->sock_client_fd, SHUT_RDWR);
-                            close(caosi->sock_client_fd);
-                            caosi->sock_client_fd = -1;
-                            break;
-                        }
-                        if (ret > 0)
-                        {
-                            printf("%s Read %zd. FIXME write the data to client device.\n", __func__, ret);
-                            fwrite(pointer, 1, ret, pcm_audio_record_file);
-                            fflush(pcm_audio_record_file);
-                            pointer += ret;
-                            len -= ret;
-                        }
-                    }
+                    pointer += ret;
+                    len -= ret;
                 }
             }
-            else
+
+            if (len == 0)
             {
-                printf("%s Unknown command.\n", __func__);
+                if (asi.cmd == CMD_OPEN)
+                {
+                    printf("%s the audio out thread starting on demand\n", __func__);
+                    caosi->asci.channel_mask = asi.asci.channel_mask;
+                    caosi->asci.format = asi.asci.format;
+                    caosi->asci.frame_count = asi.asci.frame_count;
+                    caosi->asci.sample_rate = asi.asci.sample_rate;
+                    printf("%s caosi->asci.channel_mask: %d caosi->asci.format: %d caosi->asci.frame_count: %d caosi->asci.sample_rate: %d\n",
+                           __func__, caosi->asci.channel_mask, caosi->asci.format, caosi->asci.frame_count, caosi->asci.sample_rate);
+                    buffer_size = caosi->asci.frame_count * audio_channel_count_from_out_mask(caosi->asci.channel_mask) * audio_bytes_per_sample(caosi->asci.format);
+                    printf("%s buffer_size: %zd\n", __func__, buffer_size);
+                    do
+                    {
+                        buffer = malloc(buffer_size);
+                    } while (!buffer && caosi->loop_exit == 0);
+                    if (!buffer)
+                    {
+                        printf("%s buffer is NULL. Quit\n", __func__);
+                        break;
+                    }
+                }
+                else if (asi.cmd == CMD_CLOSE)
+                {
+                    printf("%s the audio out thread stopping on demand\n", __func__);
+                    shutdown(caosi->sock_client_fd, SHUT_RDWR);
+                    close(caosi->sock_client_fd);
+                    caosi->sock_client_fd = -1;
+                    continue;
+                }
+                else if (asi.cmd == CMD_DATA)
+                {
+                    printf("%s asi.data_size: %d. Note that buffersize is %zd\n", __func__, asi.data_size, buffer_size);
+                    if (asi.data_size > 0)
+                    {
+
+                        len = asi.data_size;
+                        pointer = buffer;
+                        while (len > 0 && caosi->loop_exit == 0)
+                        {
+                            do
+                            {
+                                ret = read(caosi->sock_client_fd, pointer, len);
+                            } while (ret < 0 && errno == EINTR && caosi->loop_exit == 0);
+                            if (ret == 0)
+                            {
+                                printf("%s:%d the audio out socket server may close(CMD_DATA).\n", __func__, __LINE__);
+                                shutdown(caosi->sock_client_fd, SHUT_RDWR);
+                                close(caosi->sock_client_fd);
+                                caosi->sock_client_fd = -1;
+                                break;
+                            }
+                            if (ret > 0)
+                            {
+                                printf("%s Read %zd. FIXME write the data to client device.\n", __func__, ret);
+                                fwrite(pointer, 1, ret, pcm_audio_record_file);
+                                fflush(pcm_audio_record_file);
+                                pointer += ret;
+                                len -= ret;
+                            }
+                        }
+                        usleep(10 * 1000);
+                    }
+                }
+                else
+                {
+                    printf("%s Unknown command.\n", __func__);
+                }
             }
         }
     }

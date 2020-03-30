@@ -25,6 +25,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/epoll.h>
 
 #include <log/log.h>
 
@@ -52,6 +53,12 @@ enum
     CMD_OPEN = 0,
     CMD_CLOSE = 1,
     CMD_DATA = 2
+};
+
+enum
+{
+    AUDIO_IN = 0,
+    AUDIO_OUT = 1
 };
 
 struct audio_socket_configuration_info
@@ -84,13 +91,6 @@ struct stub_stream_out
     audio_channel_mask_t channel_mask;
     audio_format_t format;
     size_t frame_count;
-
-    //Audio out socket
-    int out_fd;
-    pthread_t oss_thread; // out socket server thread
-    int oss_exit;         // out socket server thread exit
-    int oss_fd;           // out socket server fd
-    int out_tcp_port;
 };
 
 struct stub_stream_in
@@ -101,14 +101,169 @@ struct stub_stream_in
     audio_channel_mask_t channel_mask;
     audio_format_t format;
     size_t frame_count;
+};
+
+struct audio_server_socket
+{
+    //Audio out socket
+    struct stub_stream_out *sso;
+    int out_fd;
+    pthread_t oss_thread; // out socket server thread
+    int oss_exit;         // out socket server thread exit
+    int oss_fd;           // out socket server fd
+    int out_tcp_port;
+    int oss_epoll_fd;
+    struct epoll_event oss_epoll_event[1];
 
     //Audio in socket
+    struct stub_stream_in *ssi;
     int in_fd;
     pthread_t iss_thread; // in socket server thread
     int iss_exit;         // in socket server thread exit
     int iss_fd;           // iut socket server fd
     int in_tcp_port;
+    int iss_epoll_fd;
+    struct epoll_event iss_epoll_event[1];
 };
+
+static struct audio_server_socket ass;
+
+static void sighandler(int signum)
+{
+    if (signum == SIGPIPE)
+    {
+        ALOGW("SIGPIPE will issue when writing data to the closing client socket. "
+              "Virtual audio will crash without stack and cannot recovery. "
+              "Catch SIGPIPE");
+    }
+    else
+    {
+        ALOGW("sig %d is caught.", signum);
+    }
+}
+
+static int close_socket_fd(int sd)
+{
+    if (sd > 0)
+    {
+        ALOGV("Close %d", sd);
+        shutdown(sd, SHUT_RDWR);
+        close(sd);
+        sd = -1;
+        return 0;
+    }
+    else
+    {
+        ALOGV("sd is %d. Do not need close anymore.", sd);
+        return 0;
+    }
+    return -1;
+}
+
+static int send_open_cmd(struct audio_server_socket *pass, int audio_type)
+{
+    if (!pass)
+    {
+        ALOGE("pass pointer is NULL.");
+        return -1;
+    }
+
+    int ret;
+    int client_fd = -1;
+    struct audio_socket_info asi;
+    asi.cmd = CMD_OPEN;
+    memset(&asi, 0, sizeof(struct audio_socket_info));
+
+    switch (audio_type)
+    {
+    case AUDIO_IN:
+        client_fd = pass->in_fd;
+        ALOGV("%s:%d", __func__, __LINE__);
+        if (pass->ssi)
+        {
+            asi.asci.sample_rate = pass->ssi->sample_rate;
+            asi.asci.channel_mask = pass->ssi->channel_mask;
+            asi.asci.format = pass->ssi->format;
+            asi.asci.frame_count = pass->ssi->frame_count;
+            ALOGV("%s AUDIO_IN asi.asci.sample_rate: %d asi.asci.channel_mask: %d "
+                  "asi.asci.format: %d asi.asci.frame_count: %d\n",
+                  __func__, asi.asci.sample_rate, asi.asci.channel_mask,
+                  asi.asci.format, asi.asci.frame_count);
+        }
+        break;
+    case AUDIO_OUT:
+        client_fd = pass->out_fd;
+        if (pass->sso)
+        {
+            asi.asci.sample_rate = pass->sso->sample_rate;
+            asi.asci.channel_mask = pass->sso->channel_mask;
+            asi.asci.format = pass->sso->format;
+            asi.asci.frame_count = pass->sso->frame_count;
+            ALOGV("%s AUDIO_OUT asi.asci.sample_rate: %d asi.asci.channel_mask: %d "
+                  "asi.asci.format: %d asi.asci.frame_count: %d\n",
+                  __func__, asi.asci.sample_rate, asi.asci.channel_mask,
+                  asi.asci.format, asi.asci.frame_count);
+        }
+        break;
+
+    default:
+        ALOGW("Unkown type: %d", audio_type);
+        return -1;
+        break;
+    }
+    if (client_fd < 0)
+    {
+        ALOGW("client_fd is %d. Do not send open command to client.", client_fd);
+        return 0;
+    }
+    do
+    {
+        ret = write(client_fd, &asi, sizeof(struct audio_socket_info));
+    } while (ret < 0 && errno == EINTR);
+    if (ret != sizeof(struct audio_socket_info))
+    {
+        ALOGE("%s: could not notify the client(%d) to open: ret=%d: %s.",
+              __FUNCTION__, client_fd, ret, strerror(errno));
+        return -1;
+    }
+    else
+    {
+        ALOGV("%s Notify the audio client(%d) to open.", __func__, client_fd);
+        return 0;
+    }
+}
+
+static int send_close_cmd(int client_fd)
+{
+    int ret;
+    struct audio_socket_info asi;
+    asi.cmd = CMD_CLOSE;
+    asi.data_size = 0;
+    if (client_fd > 0)
+    {
+        do
+        {
+            ret = write(client_fd, &asi, sizeof(struct audio_socket_info));
+        } while (ret < 0 && errno == EINTR);
+        if (ret != sizeof(struct audio_socket_info))
+        {
+            ALOGE("%s: could not notify the client(%d) to "
+                  "close: ret=%d: %s.",
+                  __FUNCTION__, client_fd, ret, strerror(errno));
+            return -1;
+        }
+        else
+        {
+            ALOGW("%s Notify the client(%d) to close.", __func__, client_fd);
+            return 0;
+        }
+    }
+    else
+    {
+        ALOGW("Client is %d. Do not set close command to client.", client_fd);
+        return 0;
+    }
+}
 
 static uint32_t out_get_sample_rate(const struct audio_stream *stream)
 {
@@ -200,6 +355,113 @@ static int out_set_volume(struct audio_stream_out *stream, float left,
     return 0;
 }
 
+static ssize_t out_write_to_client(struct audio_stream_out *stream, const void *buffer,
+                                   size_t bytes, int timeout)
+{
+    ssize_t ret = -1;
+    ssize_t result = 0;
+    int nevents = 0;
+    int ne;
+    if (ass.out_fd > 0)
+    {
+        nevents = epoll_wait(ass.oss_epoll_fd, ass.oss_epoll_event, 1, timeout);
+        if (nevents < 0)
+        {
+            if (errno != EINTR)
+                ALOGE("epoll_wait() unexpected error: %s", strerror(errno));
+            return errno;
+        }
+        else if (nevents == 0)
+        {
+            ALOGW("out_write_to_client: Client cannot be written in given time.");
+            return -1;
+        }
+        else if (nevents > 0)
+        {
+            for (ne = 0; ne < nevents; ne++) //In fact, only one event.
+            {
+                if (ass.oss_epoll_event[ne].data.fd == ass.out_fd)
+                {
+                    if ((ass.oss_epoll_event[ne].events & (EPOLLERR | EPOLLHUP)) != 0)
+                    {
+                        ALOGE("EPOLLERR or EPOLLHUP after epoll_wait() !?");
+                        if (epoll_ctl(ass.oss_epoll_fd, EPOLL_CTL_DEL, ass.out_fd, NULL))
+                        {
+                            ALOGE("Failed to delete audio in file descriptor to epoll");
+                        }
+                        close(ass.out_fd);
+                        ass.out_fd = -1;
+                    }
+                    else if ((ass.oss_epoll_event[ne].events & EPOLLOUT) != 0)
+                    {
+                        struct audio_socket_info asi;
+                        asi.cmd = CMD_DATA;
+                        asi.data_size = bytes;
+                        ALOGV("%s asi.data_size: %d\n", __func__, asi.data_size);
+                        do
+                        {
+                            result = write(ass.out_fd, &asi, sizeof(struct audio_socket_info));
+                        } while (result < 0 && errno == EINTR);
+                        if (result != sizeof(struct audio_socket_info))
+                        {
+                            ALOGE("%s: could not notify the audio out client(%d) "
+                                  "to receive: result=%zd: %s.",
+                                  __FUNCTION__, ass.out_fd, result, strerror(errno));
+                            continue;
+                        }
+                        else
+                            ALOGV("%s Notify the audio out client(%d) to receive.", __func__, ass.out_fd);
+
+                        result = write(ass.out_fd, buffer, bytes);
+                        if (result < 0)
+                        {
+                            ALOGE("out_write_to_client: Fail to write to audio out client(%d)"
+                                  " with error(%s)",
+                                  ass.out_fd, strerror(errno));
+                        }
+                        else if (result == 0)
+                        {
+                            ALOGW("out_write_to_client: audio out client(%d) is closed.", ass.out_fd);
+                        }
+                        else
+                        {
+                            ALOGV("out_write_to_client: Write to audio out client. "
+                                  "ass.out_fd: %d bytes: %zu",
+                                  ass.out_fd, bytes);
+                            if (bytes != (size_t)result)
+                            {
+                                ALOGW("out_write_to_client: (!^!) result(%zd) data is written. "
+                                      "But bytes(%zu) is expected.",
+                                      result, bytes);
+                            }
+                            ret = result;
+                        }
+                    }
+                    else
+                    {
+                        ALOGW("out_write_to_client: epoll unknown event. port(%d) "
+                              "ass.out_fd(%d). Return bytes(%zu) directly.",
+                              ass.out_tcp_port, ass.out_fd, bytes);
+                    }
+                }
+                else
+                {
+                    ALOGV("out_write_to_client: epoll_wait unknown source fd.");
+                }
+            }
+            return ret;
+        }
+    }
+    else
+    {
+        ALOGV("out_write_to_client: (->v->) Audio out client is not connected. "
+              "port(%d) ass.out_fd(%d). Return bytes(%zu) directly.",
+              ass.out_tcp_port, ass.out_fd, bytes);
+        return -1;
+    }
+    return ret;
+}
+
 static ssize_t out_write(struct audio_stream_out *stream, const void *buffer,
                          size_t bytes)
 {
@@ -207,47 +469,8 @@ static ssize_t out_write(struct audio_stream_out *stream, const void *buffer,
 
     struct stub_stream_out *out = (struct stub_stream_out *)stream;
     ssize_t ret = bytes;
-    if (bytes > 0)
-    {
-        if (out->out_fd > 0)
-        {
-            struct audio_socket_info asi;
-            asi.cmd = CMD_DATA;
-            asi.data_size = bytes;
-            ALOGV("%s asi.data_size: %d\n", __func__, asi.data_size);
-            do
-            {
-                ret = write(out->out_fd, &asi, sizeof(struct audio_socket_info));
-            } while (ret < 0 && errno == EINTR);
-            if (ret != sizeof(struct audio_socket_info))
-                ALOGE("%s: could not notify the audio out client(%d) to receive: ret=%zd: %s.",
-                      __FUNCTION__, out->out_fd, ret, strerror(errno));
-            else
-                ALOGV("%s Notify the audio out client(%d) to receive.", __func__, out->out_fd);
+    ssize_t result = -1;
 
-            ret = write(out->out_fd, buffer, bytes);
-            if (ret < 0)
-            {
-                ALOGE("out_write: Fail to write to audio out client(%d) with error(%s)", out->out_fd, strerror(errno));
-            }
-            else if (ret == 0)
-            {
-                ALOGW("out_write: audio out client(%d) is closed.", out->out_fd);
-            }
-            else
-            {
-                ALOGV("out_write: Write to audio out client. out->out_fd: %d bytes: %zu", out->out_fd, bytes);
-                if (bytes != (size_t)ret)
-                {
-                    ALOGW("out_write: (!^!) ret(%zd) data is written. But bytes(%zu) is expected.", ret, bytes);
-                }
-            }
-        }
-        else
-        {
-            ALOGV("out_write: (->v->) Audio out client is not connected. port(%d) out->out_fd(%d). Return bytes(%zu) directly.", out->out_tcp_port, out->out_fd, bytes);
-        }
-    }
     /* XXX: fake timing for audio output */
     struct timespec t = {.tv_sec = 0, .tv_nsec = 0};
     clock_gettime(CLOCK_MONOTONIC, &t);
@@ -257,6 +480,21 @@ static ssize_t out_write(struct audio_stream_out *stream, const void *buffer,
                              out_get_sample_rate(&stream->common) -
                          elapsed_time_since_last_write;
 
+    if (bytes > 0)
+    {
+        result = out_write_to_client(stream, buffer, bytes, sleep_time);
+        if (result < 0)
+        {
+            ALOGV("The result of out_write_to_client is %zd", result);
+        }
+        else if (result > 0)
+        {
+            ret = result;
+        }
+    }
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    const int64_t new_now = (t.tv_sec * 1000000000LL + t.tv_nsec) / 1000;
+    sleep_time = sleep_time - (new_now - now);
     if (sleep_time > 0)
     {
         usleep(sleep_time);
@@ -266,7 +504,7 @@ static ssize_t out_write(struct audio_stream_out *stream, const void *buffer,
         // we don't sleep when we exit standby (this is typical for a real alsa buffer).
         sleep_time = 0;
     }
-    out->last_write_time_us = now + sleep_time;
+    out->last_write_time_us = new_now + sleep_time;
     // last_write_time_us is an approximation of when the (simulated) alsa
     // buffer is believed completely full. The usleep above waits for more space
     // in the buffer, but by the end of the sleep the buffer is considered
@@ -305,6 +543,108 @@ static int out_get_next_write_timestamp(const struct audio_stream_out *stream,
     *timestamp = 0;
     ALOGV("out_get_next_write_timestamp: %ld", (long int)(*timestamp));
     return -EINVAL;
+}
+
+static void *out_socket_sever_thread(void *args)
+{
+    struct audio_server_socket *pass = (struct audio_server_socket *)args;
+    int ret = 0;
+    int so_reuseaddr = 1;
+    int new_client_fd = -1;
+
+    ALOGV("%s Constructing audio out socket server...", __func__);
+    pass->oss_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (pass->oss_fd < 0)
+    {
+        ALOGE("%s:%d Fail to construct audio out socket with error: %s",
+              __func__, __LINE__, strerror(errno));
+        return NULL;
+    }
+    if (setsockopt(pass->oss_fd, SOL_SOCKET, SO_REUSEADDR, &so_reuseaddr, sizeof(int)) < 0)
+    {
+        ALOGE("%s setsockopt(SO_REUSEADDR) failed. pass->oss_fd: %d\n", __func__, pass->oss_fd);
+        return NULL;
+    }
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons(pass->out_tcp_port);
+
+    ret = bind(pass->oss_fd, (struct sockaddr *)&addr, sizeof(struct sockaddr_in));
+    if (ret < 0)
+    {
+        ALOGE("%s Failed to bind port(%d). ret: %d %s", __func__, pass->out_tcp_port, ret, strerror(errno));
+        return NULL;
+    }
+
+    ret = listen(pass->oss_fd, 5);
+    if (ret < 0)
+    {
+        ALOGE("%s Failed to listen on port %d", __func__, pass->out_tcp_port);
+        return NULL;
+    }
+
+    while (!pass->oss_exit)
+    {
+        socklen_t alen = sizeof(struct sockaddr_in);
+
+        ALOGW("%s Wait a audio out client to connect...", __func__);
+        new_client_fd = accept(pass->oss_fd, (struct sockaddr *)&addr, &alen);
+        if (new_client_fd < 0)
+        {
+            ALOGE("%s The audio in socket server maybe shutdown as quit command is got. "
+                  "Or else, error happen. port: %d %s",
+                  __func__, pass->out_tcp_port, strerror(errno));
+        }
+        else
+        {
+            ALOGW("%s Currently only receive one out client. Close previous "
+                  "client(%d)",
+                  __func__, pass->out_fd);
+            if (send_close_cmd(pass->out_fd) < 0)
+            {
+                ALOGE("Fail to notify audio out client(%d) to close.", pass->out_fd);
+            }
+            if (pass->out_fd > 0)
+            {
+                if (epoll_ctl(pass->oss_epoll_fd, EPOLL_CTL_DEL, pass->out_fd, NULL))
+                {
+                    ALOGE("Failed to delete audio out file descriptor to epoll");
+                }
+                close(pass->out_fd);
+                pass->out_fd = -1;
+            }
+
+            ALOGW("%s A new audio out client connected to server. "
+                  "new_client_fd = %d",
+                  __func__, new_client_fd);
+            pass->out_fd = new_client_fd;
+            if (pass->out_fd > 0)
+            {
+                if (pass->sso) // Make sure parameters are ready.
+                {
+                    if (send_open_cmd(pass, AUDIO_OUT) < 0)
+                    {
+                        ALOGE("Fail to send OPEN command to audio out client(%d)", pass->out_fd);
+                    }
+                }
+
+                struct epoll_event event;
+                event.events = EPOLLOUT;
+                event.data.fd = pass->out_fd;
+                if (epoll_ctl(pass->oss_epoll_fd, EPOLL_CTL_ADD, pass->out_fd, &event))
+                {
+                    ALOGE("Failed to add audio out file descriptor to epoll");
+                }
+            }
+        }
+    }
+    ALOGW("%s Quit. port %d(%d)", __func__, pass->out_tcp_port, pass->out_fd);
+    close_socket_fd(pass->out_fd);
+    close_socket_fd(pass->oss_fd);
+    return NULL;
 }
 
 /** audio_stream_in implementation **/
@@ -388,6 +728,96 @@ static int in_set_gain(struct audio_stream_in *stream, float gain)
     return 0;
 }
 
+static ssize_t in_read_from_client(struct audio_stream_in *stream, void *buffer,
+                                   size_t bytes, int timeout)
+{
+    ssize_t ret = -1;
+    ssize_t result = 0;
+    int nevents = 0;
+    int ne;
+    if (ass.in_fd > 0)
+    {
+        nevents = epoll_wait(ass.iss_epoll_fd, ass.iss_epoll_event, 1, timeout);
+        if (nevents < 0)
+        {
+            if (errno != EINTR)
+                ALOGE("epoll_wait() unexpected error: %s", strerror(errno));
+            return errno;
+        }
+        else if (nevents == 0)
+        {
+            ALOGW("in_read_from_client: Client cannot be read in given time.");
+            memset(buffer, 0, bytes);
+            return bytes;
+        }
+        else if (nevents > 0)
+        {
+            for (ne = 0; ne < nevents; ne++) // In fact, only one event.
+            {
+                if (ass.iss_epoll_event[ne].data.fd == ass.in_fd)
+                {
+                    if ((ass.iss_epoll_event[ne].events & (EPOLLERR | EPOLLHUP)) != 0)
+                    {
+                        ALOGE("EPOLLERR or EPOLLHUP after epoll_wait() !?");
+                        if (epoll_ctl(ass.iss_epoll_fd, EPOLL_CTL_DEL, ass.in_fd, NULL))
+                        {
+                            ALOGE("Failed to delete audio in file descriptor to epoll");
+                        }
+                        close(ass.in_fd);
+                        ass.in_fd = -1;
+                    }
+                    else if ((ass.iss_epoll_event[ne].events & EPOLLIN) != 0)
+                    {
+                        result = read(ass.in_fd, buffer, bytes);
+                        if (result < 0)
+                        {
+                            ALOGE("in_read_from_client: Fail to read from audio in client(%d) "
+                                  "with error (%s)",
+                                  ass.in_fd, strerror(errno));
+                        }
+                        else if (result == 0)
+                        {
+                            ALOGE("in_read_from_client: Audio in client(%d) is closed.", ass.in_fd);
+                        }
+                        else
+                        {
+                            ALOGV("in_read_from_client: Read from port %d ass.in_fd %d bytes "
+                                  "%zu, result: %zd",
+                                  ass.in_tcp_port, ass.in_fd, bytes, result);
+                            if (bytes != (size_t)result)
+                            {
+                                ALOGW("in_read_from_client: (!^!) result(%zd) data is read. But "
+                                      "bytes(%zu) is expected.",
+                                      result, bytes);
+                            }
+                            ret = result;
+                        }
+                    }
+                    else
+                    {
+                        ALOGW("in_read_from_client: epoll unknown event. port(%d) ass.in_fd(%d)"
+                              ". Memset data to 0. Return bytes(%zu) directly.",
+                              ass.in_tcp_port, ass.in_fd, bytes);
+                    }
+                }
+                else
+                {
+                    ALOGV("in_read_from_client: epoll_wait unknown");
+                }
+            }
+            return ret;
+        }
+    }
+    else
+    {
+        ALOGV("in_read_from_client: (->v->) Audio in client is not connected. port(%d)"
+              " ass.in_fd(%d). Memset data to 0. Return bytes(%zu) directly.",
+              ass.in_tcp_port, ass.in_fd, bytes);
+        memset(buffer, 0, bytes);
+        return bytes;
+    }
+    return ret;
+}
 static ssize_t in_read(struct audio_stream_in *stream, void *buffer,
                        size_t bytes)
 {
@@ -395,34 +825,8 @@ static ssize_t in_read(struct audio_stream_in *stream, void *buffer,
 
     struct stub_stream_in *in = (struct stub_stream_in *)stream;
     ssize_t ret = bytes;
-    if (bytes > 0)
-    {
-        if (in->in_fd > 0)
-        {
-            ret = read(in->in_fd, buffer, bytes);
-            if (ret < 0)
-            {
-                ALOGE("in_read: Fail to read from audio in client(%d) with error (%s)", in->in_fd, strerror(errno));
-            }
-            else if (ret == 0)
-            {
-                ALOGE("in_read: Audio in client(%d) is closed.", in->in_fd);
-            }
-            else
-            {
-                ALOGV("in_read: Read from port %d in->in_fd %d bytes %zu, ret: %zd", in->in_tcp_port, in->in_fd, bytes, ret);
-                if (bytes != (size_t)ret)
-                {
-                    ALOGW("in_read: (!^!) ret(%zd) data is read. But bytes(%zu) is expected.", ret, bytes);
-                }
-            }
-        }
-        else
-        {
-            ALOGV("in_read: (->v->) Audio in client is not connected. port(%d) in->in_fd(%d). Memset data to 0. Return bytes(%zu) directly.", in->in_tcp_port, in->in_fd, bytes);
-            memset(buffer, 0, bytes);
-        }
-    }
+    ssize_t result = -1;
+
     /* XXX: fake timing for audio input */
     struct timespec t = {.tv_sec = 0, .tv_nsec = 0};
     clock_gettime(CLOCK_MONOTONIC, &t);
@@ -431,7 +835,7 @@ static ssize_t in_read(struct audio_stream_in *stream, void *buffer,
     // we do a full sleep when exiting standby.
     const bool standby = in->last_read_time_us == 0;
     int64_t elapsed_time_since_last_read = 0;
-    if (in->in_fd > 0)
+    if (ass.in_fd > 0)
     {
         elapsed_time_since_last_read = now - in->last_read_time_us;
     }
@@ -442,7 +846,21 @@ static ssize_t in_read(struct audio_stream_in *stream, void *buffer,
     int64_t sleep_time = bytes * 1000000LL / audio_stream_in_frame_size(stream) /
                              in_get_sample_rate(&stream->common) -
                          elapsed_time_since_last_read;
-
+    if (bytes > 0)
+    {
+        result = in_read_from_client(stream, buffer, bytes, sleep_time);
+        if (result < 0)
+        {
+            ALOGV("The result of in_read_from_client is %zd", result);
+        }
+        else if (result > 0)
+        {
+            ret = result;
+        }
+    }
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    const int64_t new_now = (t.tv_sec * 1000000000LL + t.tv_nsec) / 1000;
+    sleep_time = sleep_time - (new_now - now);
     if (sleep_time > 0)
     {
         usleep(sleep_time);
@@ -451,7 +869,7 @@ static ssize_t in_read(struct audio_stream_in *stream, void *buffer,
     {
         sleep_time = 0;
     }
-    in->last_read_time_us = now + sleep_time;
+    in->last_read_time_us = new_now + sleep_time;
     // last_read_time_us is an approximation of when the (simulated) alsa
     // buffer is drained by the read, and is empty.
     //
@@ -476,30 +894,24 @@ static int in_remove_audio_effect(const struct audio_stream *stream, effect_hand
     return 0;
 }
 
-static size_t samples_per_milliseconds(size_t milliseconds,
-                                       uint32_t sample_rate,
-                                       size_t channel_count)
+static void *in_socket_sever_thread(void *args)
 {
-    return milliseconds * sample_rate * channel_count / 1000;
-}
-
-static void *out_socket_sever_thread(void *args)
-{
-    struct stub_stream_out *out = (struct stub_stream_out *)args;
+    struct audio_server_socket *pass = (struct audio_server_socket *)args;
     int ret = 0;
     int so_reuseaddr = 1;
+    int new_client_fd = -1;
 
-    ALOGV("%s Constructing audio out socket server...", __func__);
-    out->oss_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (out->oss_fd < 0)
+    ALOGV("%s Constructing audio in socket server...", __func__);
+    pass->iss_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (pass->iss_fd < 0)
     {
-        ALOGE("%s:%d Fail to construct audio out socket with error: %s",
+        ALOGE("%s:%d Fail to construct audio in socket with error: %s",
               __func__, __LINE__, strerror(errno));
         return NULL;
     }
-    if (setsockopt(out->oss_fd, SOL_SOCKET, SO_REUSEADDR, &so_reuseaddr, sizeof(int)) < 0)
+    if (setsockopt(pass->iss_fd, SOL_SOCKET, SO_REUSEADDR, &so_reuseaddr, sizeof(int)) < 0)
     {
-        ALOGE("%s setsockopt(SO_REUSEADDR) failed. out->oss_fd: %d\n", __func__, out->oss_fd);
+        ALOGE("%s setsockopt(SO_REUSEADDR) failed. pass->iss_fd: %d\n", __func__, pass->iss_fd);
         return NULL;
     }
 
@@ -507,62 +919,90 @@ static void *out_socket_sever_thread(void *args)
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port = htons(out->out_tcp_port);
+    addr.sin_port = htons(pass->in_tcp_port);
 
-    ret = bind(out->oss_fd, (struct sockaddr *)&addr, sizeof(struct sockaddr_in));
+    ret = bind(pass->iss_fd, (struct sockaddr *)&addr, sizeof(struct sockaddr_in));
     if (ret < 0)
     {
-        ALOGE("%s Failed to bind port(%d). ret: %d %s", __func__, out->out_tcp_port, ret, strerror(errno));
+        ALOGE("%s Failed to bind port(%d). ret: %d, %s",
+              __func__, pass->in_tcp_port, ret, strerror(errno));
         return NULL;
     }
 
-    ret = listen(out->oss_fd, 5);
+    ret = listen(pass->iss_fd, 5);
     if (ret < 0)
     {
-        ALOGE("%s Failed to listen on port %d", __func__, out->out_tcp_port);
+        ALOGE("%s Failed to listen on port %d", __func__, pass->in_tcp_port);
         return NULL;
     }
 
-    while (!out->oss_exit)
+    while (!pass->iss_exit)
     {
         socklen_t alen = sizeof(struct sockaddr_in);
 
-        ALOGW("%s Wait a audio out client to connect...", __func__);
-        out->out_fd = accept(out->oss_fd, (struct sockaddr *)&addr, &alen);
-        if (out->out_fd < 0)
+        ALOGW("%s Wait a audio in client to connect...", __func__);
+        new_client_fd = accept(pass->iss_fd, (struct sockaddr *)&addr, &alen);
+        if (new_client_fd < 0)
         {
             ALOGE("%s The audio in socket server maybe shutdown as quit command is got. "
                   "Or else, error happen. port: %d %s",
-                  __func__, out->out_tcp_port, strerror(errno));
+                  __func__, pass->in_tcp_port, strerror(errno));
         }
         else
         {
-            ALOGW("%s A new audio out client connected to server. out->out_fd = %d", __func__, out->out_fd);
-            struct audio_socket_info asi;
-            asi.cmd = CMD_OPEN;
-            asi.asci.sample_rate = out->sample_rate;
-            asi.asci.channel_mask = out->channel_mask;
-            asi.asci.format = out->format;
-            asi.asci.frame_count = out->frame_count;
-            ALOGV("%s asi.asci.sample_rate: %d asi.asci.channel_mask: %d asi.asci.format: %d asi.asci.frame_count: %d\n",
-                  __func__, asi.asci.sample_rate, asi.asci.channel_mask, asi.asci.format, asi.asci.frame_count);
-            do
+            ALOGW("%s Currently only receive one input client. "
+                  "Close previous client(%d)",
+                  __func__, pass->in_fd);
+            if (send_close_cmd(pass->in_fd) < 0)
             {
-                ret = write(out->out_fd, &asi, sizeof(struct audio_socket_info));
-            } while (ret < 0 && errno == EINTR);
-            if (ret != sizeof(struct audio_socket_info))
-                ALOGE("%s: could not notify the audio out client(%d) to open: ret=%d: %s.",
-                      __FUNCTION__, out->out_fd, ret, strerror(errno));
-            else
-                ALOGV("%s Notify the audio out client(%d) to open.", __func__, out->out_fd);
+                ALOGE("Fail to notify audio in client(%d) to close.", pass->in_fd);
+            }
+            if (pass->in_fd > 0)
+            {
+
+                if (epoll_ctl(pass->iss_epoll_fd, EPOLL_CTL_DEL, pass->in_fd, NULL))
+                {
+                    ALOGE("Failed to delete audio in file descriptor to epoll");
+                }
+                close(pass->in_fd);
+                pass->in_fd = -1;
+            }
+
+            ALOGW("%s A new audio in client connected to server. "
+                  "new_client_fd = %d. Set it to pass->in_fd",
+                  __func__, new_client_fd);
+            pass->in_fd = new_client_fd;
+            if (pass->in_fd > 0)
+            {
+                if (pass->ssi) // Make sure parameters are ready.
+                {
+                    if (send_open_cmd(pass, AUDIO_IN) < 0)
+                    {
+                        ALOGE("Fail to send OPEN command to audio in client(%d)", pass->in_fd);
+                    }
+                }
+
+                struct epoll_event event;
+                event.events = EPOLLIN;
+                event.data.fd = pass->in_fd;
+                if (epoll_ctl(pass->iss_epoll_fd, EPOLL_CTL_ADD, pass->in_fd, &event))
+                {
+                    ALOGE("Failed to add audio in file descriptor to epoll");
+                }
+            }
         }
     }
-    ALOGW("%s Quit. port %d(%d)", __func__, out->out_tcp_port, out->out_fd);
-    close(out->out_fd);
-    out->out_fd = -1;
-    close(out->oss_fd);
-    out->oss_fd = -1;
+    ALOGW("%s Quit. prot %d(%d)", __func__, pass->in_tcp_port, pass->in_fd);
+    close_socket_fd(pass->in_fd);
+    close_socket_fd(pass->iss_fd);
     return NULL;
+}
+
+static size_t samples_per_milliseconds(size_t milliseconds,
+                                       uint32_t sample_rate,
+                                       size_t channel_count)
+{
+    return milliseconds * sample_rate * channel_count / 1000;
 }
 
 static int adev_open_output_stream(struct audio_hw_device *dev,
@@ -610,57 +1050,30 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out->frame_count = samples_per_milliseconds(
         STUB_OUTPUT_BUFFER_MILLISECONDS,
         out->sample_rate, 1);
-    ALOGV("%s:%d Init out->out_fd to %d", __func__, __LINE__, out->out_fd);
-    out->out_fd = -1;
-    out->oss_fd = -1;
-    out->oss_exit = 0;
-    out->out_tcp_port = 8768;
-    char buf[PROPERTY_VALUE_MAX] = {
-        '\0',
-    };
-
-    if (property_get("virtual.audio.out.tcp.por", buf, "") > 0)
-    {
-        out->out_tcp_port = atoi(buf);
-    }
-    pthread_create(&out->oss_thread, NULL, out_socket_sever_thread, out);
 
     ALOGV("adev_open_output_stream: sample_rate: %u, channels: %x, format: %d,"
           " frames: %zu",
           out->sample_rate, out->channel_mask, out->format,
           out->frame_count);
     *stream_out = &out->stream;
+    ass.sso = out;
+    if (send_open_cmd(&ass, AUDIO_OUT) < 0)
+    {
+        ALOGE("Fail to send OPEN command to audio out client(%d)", ass.out_fd);
+    }
+
     return 0;
 }
 
 static void adev_close_output_stream(struct audio_hw_device *dev,
                                      struct audio_stream_out *stream)
 {
-    struct stub_stream_out *out = (struct stub_stream_out *)stream;
-    if (out->out_fd > 0)
+    if (send_close_cmd(ass.out_fd) < 0)
     {
-        int ret = 0;
-        struct audio_socket_info asi;
-        asi.cmd = CMD_CLOSE;
-        asi.data_size = 0;
-        do
-        {
-            ret = write(out->out_fd, &asi, sizeof(struct audio_socket_info));
-        } while (ret < 0 && errno == EINTR);
-        if (ret != sizeof(struct audio_socket_info))
-            ALOGE("%s: could not notify the audio out client(%d) to close: ret=%d: %s.",
-                  __FUNCTION__, out->out_fd, ret, strerror(errno));
-        else
-            ALOGV("%s Notify the audio out client(%d) to close.", __func__, out->out_fd);
+        ALOGE("Fail to notify audio out client(%d) to close.", ass.out_fd);
     }
-    out->oss_exit = 1;
-    if (out->oss_fd > 0)
-    {
-        ALOGV("Audio out socket server shutdown...");
-        shutdown(out->oss_fd, SHUT_RD);
-        close(out->oss_fd);
-        out->oss_fd = -1;
-    }
+
+    ass.sso = NULL;
     ALOGV("adev_close_output_stream...");
     free(stream);
 }
@@ -755,86 +1168,6 @@ static size_t adev_get_input_buffer_size(const struct audio_hw_device *dev,
     return buffer_size;
 }
 
-static void *in_socket_sever_thread(void *args)
-{
-    struct stub_stream_in *in = (struct stub_stream_in *)args;
-    int ret = 0;
-    int so_reuseaddr = 1;
-
-    ALOGV("%s Constructing audio in socket server...", __func__);
-    in->iss_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (in->iss_fd < 0)
-    {
-        ALOGE("%s:%d Fail to construct audio in socket with error: %s",
-              __func__, __LINE__, strerror(errno));
-        return NULL;
-    }
-    if (setsockopt(in->iss_fd, SOL_SOCKET, SO_REUSEADDR, &so_reuseaddr, sizeof(int)) < 0)
-    {
-        ALOGE("%s setsockopt(SO_REUSEADDR) failed. in->iss_fd: %d\n", __func__, in->iss_fd);
-        return NULL;
-    }
-
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port = htons(in->in_tcp_port);
-
-    ret = bind(in->iss_fd, (struct sockaddr *)&addr, sizeof(struct sockaddr_in));
-    if (ret < 0)
-    {
-        ALOGE("%s Failed to bind port(%d). ret: %d, %s", __func__, in->in_tcp_port, ret, strerror(errno));
-        return NULL;
-    }
-
-    ret = listen(in->iss_fd, 5);
-    if (ret < 0)
-    {
-        ALOGE("%s Failed to listen on port %d", __func__, in->in_tcp_port);
-        return NULL;
-    }
-
-    while (!in->iss_exit)
-    {
-        socklen_t alen = sizeof(struct sockaddr_in);
-
-        ALOGW("%s Wait a audio in client to connect...", __func__);
-        in->in_fd = accept(in->iss_fd, (struct sockaddr *)&addr, &alen);
-        if (in->in_fd < 0)
-        {
-            ALOGE("%s The audio in socket server maybe shutdown as quit command is got. "
-                  "Or else, error happen. port: %d %s",
-                  __func__, in->in_tcp_port, strerror(errno));
-        }
-        else
-        {
-            ALOGW("%s A new audio in client connected to server. in->in_fd = %d", __func__, in->in_fd);
-            struct audio_socket_info asi;
-            asi.cmd = CMD_OPEN;
-            asi.asci.sample_rate = in->sample_rate;
-            asi.asci.channel_mask = in->channel_mask;
-            asi.asci.format = in->format;
-            asi.asci.frame_count = in->frame_count;
-            do
-            {
-                ret = write(in->in_fd, &asi, sizeof(struct audio_socket_info));
-            } while (ret < 0 && errno == EINTR);
-            if (ret != sizeof(struct audio_socket_info))
-                ALOGE("%s: could not notify the audio in client(%d) to open: ret=%d: %s.",
-                      __FUNCTION__, in->in_fd, ret, strerror(errno));
-            else
-                ALOGV("%s Notify the audio in client(%d) to open.", __func__, in->in_fd);
-        }
-    }
-    ALOGW("%s Quit. prot %d(%d)", __func__, in->in_tcp_port, in->in_fd);
-    close(in->in_fd);
-    in->in_fd = -1;
-    close(in->iss_fd);
-    in->iss_fd = -1;
-    return NULL;
-}
-
 static int adev_open_input_stream(struct audio_hw_device *dev,
                                   audio_io_handle_t handle,
                                   audio_devices_t devices,
@@ -877,57 +1210,30 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
         in->format = STUB_DEFAULT_AUDIO_FORMAT;
     in->frame_count = samples_per_milliseconds(
         STUB_INPUT_BUFFER_MILLISECONDS, in->sample_rate, 1);
-    in->in_fd = -1;
-    in->iss_fd = -1;
-    in->iss_exit = 0;
-    in->in_tcp_port = 8767;
-    char buf[PROPERTY_VALUE_MAX] = {
-        '\0',
-    };
-
-    if (property_get("virtual.audio.in.tcp.port", buf, "") > 0)
-    {
-        in->in_tcp_port = atoi(buf);
-    }
-    pthread_create(&in->iss_thread, NULL, in_socket_sever_thread, in);
 
     ALOGV("adev_open_input_stream: sample_rate: %u, channels: %x, format: %d,"
           "frames: %zu",
           in->sample_rate, in->channel_mask, in->format,
           in->frame_count);
     *stream_in = &in->stream;
+    ass.ssi = in;
+
+    if (send_open_cmd(&ass, AUDIO_IN) < 0)
+    {
+        ALOGE("Fail to send OPEN command to audio in client(%d)", ass.in_fd);
+    }
+
     return 0;
 }
 
 static void adev_close_input_stream(struct audio_hw_device *dev,
                                     struct audio_stream_in *stream)
 {
-    struct stub_stream_in *in = (struct stub_stream_in *)stream;
-
-    if (in->in_fd > 0)
+    if (send_close_cmd(ass.in_fd) < 0)
     {
-        int ret = 0;
-        struct audio_socket_info asi;
-        asi.cmd = CMD_CLOSE;
-        asi.data_size = 0;
-        do
-        {
-            ret = write(in->in_fd, &asi, sizeof(struct audio_socket_info));
-        } while (ret < 0 && errno == EINTR);
-        if (ret != sizeof(struct audio_socket_info))
-            ALOGE("%s: could not notify the audio in client(%d) to close: ret=%d: %s.",
-                  __FUNCTION__, in->in_fd, ret, strerror(errno));
-        else
-            ALOGV("%s Notify the audio in client(%d) to close.", __func__, in->in_fd);
+        ALOGE("Fail to notify audio out client(%d) to close.", ass.in_fd);
     }
-    in->iss_exit = 1;
-    if (in->iss_fd > 0)
-    {
-        ALOGV("Audio in socket server shutdown...");
-        shutdown(in->iss_fd, SHUT_RD);
-        close(in->iss_fd);
-        in->iss_fd = -1;
-    }
+    ass.ssi = NULL;
     ALOGV("adev_close_input_stream...");
     return;
 }
@@ -941,6 +1247,30 @@ static int adev_dump(const audio_hw_device_t *device, int fd)
 static int adev_close(hw_device_t *device)
 {
     ALOGV("adev_close");
+    ass.oss_exit = 1;
+    if (epoll_ctl(ass.oss_epoll_fd, EPOLL_CTL_DEL, ass.out_fd, NULL))
+    {
+        ALOGE("Failed to delete audio in file descriptor to epoll");
+    }
+    if (close(ass.oss_epoll_fd))
+    {
+        ALOGE("Failed to close output epoll file descriptor");
+    }
+    close_socket_fd(ass.out_fd);
+    close_socket_fd(ass.oss_fd);
+
+    ass.iss_exit = 1;
+    if (epoll_ctl(ass.oss_epoll_fd, EPOLL_CTL_DEL, ass.out_fd, NULL))
+    {
+        ALOGE("Failed to delete audio in file descriptor to epoll");
+    }
+    if (close(ass.iss_epoll_fd))
+    {
+        ALOGE("Failed to close output epoll file descriptor");
+    }
+    close_socket_fd(ass.in_fd);
+    close_socket_fd(ass.iss_fd);
+
     free(device);
     return 0;
 }
@@ -952,7 +1282,7 @@ static int adev_open(const hw_module_t *module, const char *name,
 
     //It will generate SIGPIPE when write to a closed socket, which will kill
     //the process. Ignore the signal SIGPIPE to avoid the process crash.
-    signal(SIGPIPE, SIG_IGN);
+    signal(SIGPIPE, sighandler);
 
     struct stub_audio_device *adev;
 
@@ -987,6 +1317,41 @@ static int adev_open(const hw_module_t *module, const char *name,
     adev->device.dump = adev_dump;
 
     *device = &adev->device.common;
+
+    char buf[PROPERTY_VALUE_MAX] = {
+        '\0',
+    };
+    ass.sso = NULL;
+    ass.out_fd = -1;
+    ass.oss_fd = -1;
+    ass.oss_exit = 0;
+    ass.out_tcp_port = 8768;
+    if (property_get("virtual.audio.out.tcp.port", buf, "") > 0)
+    {
+        ass.out_tcp_port = atoi(buf);
+    }
+    pthread_create(&ass.oss_thread, NULL, out_socket_sever_thread, &ass);
+    ass.oss_epoll_fd = epoll_create1(0);
+    if (ass.oss_epoll_fd == -1)
+    {
+        ALOGE("Failed to create output epoll file descriptor");
+    }
+
+    ass.ssi = NULL;
+    ass.in_fd = -1;
+    ass.iss_fd = -1;
+    ass.iss_exit = 0;
+    ass.in_tcp_port = 8767;
+    if (property_get("virtual.audio.in.tcp.port", buf, "") > 0)
+    {
+        ass.in_tcp_port = atoi(buf);
+    }
+    pthread_create(&ass.iss_thread, NULL, in_socket_sever_thread, &ass);
+    ass.iss_epoll_fd = epoll_create1(0);
+    if (ass.iss_epoll_fd == -1)
+    {
+        ALOGE("Failed to create output epoll file descriptor");
+    }
 
     return 0;
 }

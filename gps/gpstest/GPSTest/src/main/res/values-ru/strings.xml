@@ -25,7 +25,7 @@
 
     <!-- Navigation Drawer -->
     <string name="navdrawer_separator_assist_data">Изменить вспом. сведения</string>
-    <string name="force_xtra_injection">Внести XTRA св.</string>
+    <string name="force_psds_injection">Внести PSDS св.</string>
     <string name="force_time_injection">Внести время</string>
     <string name="delete_aiding_data">Очистить всп. св.</string>
     <string name="navdrawer_item_settings">Настройки</string>
@@ -44,13 +44,20 @@
     <string name="delete_aiding_data_failure">Устройство не поддерживает удаление вспомогательных сведений.
     </string>
     <string name="gps_switch">Вкл/Выкл</string>
+    <string name="share">Поделиться</string>
+    <string name="copied_to_clipboard">Местоположение скопировано</string>
+    <string name="send_log">Отправить логи...</string>
+    <string name="log_instructions">Включить логирование для NMEA, сырые измерения, сообщения навигации и т. д. в Настройках</string>
+    <string name="log_error">С журналированием что-то не так. Разрешили ли вы доступ к файлохранилищу? Попробуйте снова включить журналирование в настройках и нажмите \"Разрешить\" при запросе доступа.</string>
+    <string name="no_location">Попробовать поделиться месторасположением после GNSS фиксации</string>
+    <string name="include_altitude">Включать высоту над уровнем моря</string>
     <string name="set_fix_frequency">Установить частоту фиксации</string>
     <string name="force_time_injection_success">Успешно внесены сведения о времени.</string>
     <string name="force_time_injection_failure">Устройство не поддерживает внесение сведений о времени.
     </string>
 
-    <string name="force_xtra_injection_success">Успешно внесены XTRA сведения.</string>
-    <string name="force_xtra_injection_failure">Устройство не поддерживает внесение XTRA сведений.
+    <string name="force_psds_injection_success">Успешно внесены PSDS сведения.</string>
+    <string name="force_psds_injection_failure">Устройство не поддерживает внесение PSDS сведений.
     </string>
 
     <string name="zoom_in">Приблизить</string>
@@ -88,8 +95,14 @@
     <string name="install">Установить</string>
     <string name="no_thanks">Спасибо, не надо</string>
     <string name="please_install_google_maps">Для работы Карт требуется Google Maps</string>
+    <string name="enable_gps_message">GPS/GNSS отключен.
+Включить?</string>
+    <string name="enable_gps_positive_button">Включить GPS/GNSS</string>
     <string name="enable_gps_negative_button">Нет</string>
+    <string name="gps_set_location_listener">Запущена GNSS с интервалом = %1$sс, мин. расст. = %2$sм
+    </string>
     <string name="clear_assist_warning_title">Удалить всп. сведения?</string>
+    <string name="clear_assist_warning">Некоторым устройствам может потребоваться 24 часа чтобы автоматически обновить вспомогательную информацию. Если ваше устройство не поддерживает ручное внесение данных, GNSS может перестать работать во всех приложениях до завершения автоматического обновления данных. Удалить вспомогательную информацию?</string>
     <string name="never_ask_again">Больше не спрашивать</string>
     <string name="qr_code_instructions_title">Сканировать QR код</string>
     <string name="qr_code_instructions_text">Внести текущее местоположение QR кодом в формате Geo URI (geo:28.38434,-87.24334). Создать собственный QR код через https://zxing.appspot.com/generator/</string>
@@ -101,12 +114,14 @@
     <string name="gnss_not_available">Недоступны спутники спутниковой системы навигации (ССН)</string>
     <string name="sbas_not_available">Недоступны спутники спутниковой системы дифференциальной коррекции (ССДК)</string>
     <string name="menu_option_sort_by">Сортировать по</string>
+    <string name="error_time_title">GNSS время неверно</string>
+    <string name="error_time_message">GNSS время на устройстве:\n\n%1$s\n\n…отличается более чем на %2$d дней от системных часов. Проблема может быть вызвана переключением недель в GPS - обратитесь к производителю вашего устройства. См. http://bit.ly/gps-week-rollover.</string>
 
     <!-- Map view -->
     <string name="ground_truth_latitude">Ваша широта</string>
     <string name="ground_truth_longitude">Ваша долгота</string>
     <string name="ground_truth_altitude">Ваша высота по WGS84 (Необязательно)</string>
-    <string name="set_ground_truth_title">Точность измерений</string>
+    <string name="set_ground_truth_title">Включить оценку точности</string>
     <string name="set_ground_truth_subtitle">Нажмите на карте или внесите ваши координаты</string>
     <string name="save">Сохранить</string>
     <string name="edit">Редактировать</string>
@@ -144,9 +159,9 @@
     <string name="sky_legend_shape_msas">MSAS (Япония)</string>
     <string name="sky_legend_shape_sdcm">СДКМ (Россия)</string>
     <string name="sky_legend_shape_snas">SNAS (Китай)</string>
-    <string name="sky_legend_shape_saccsa">SACCSA (ICAO)</string>
+    <string name="sky_legend_shape_saccsa">SACCSA (ИКАО)</string>
 
-    <string name="sky_legend_shape_availability_title">Доступность сиграла</string>
+    <string name="sky_legend_shape_availability_title">Доступность сигнала</string>
     <string name="sky_legend_shape_not_in_view">Вне поля видимости устройства</string>
     <string name="sky_legend_shape_in_view">В поле видимости</string>
     <string name="sky_legend_shape_used_in_fix">Используется в определении</string>
@@ -170,12 +185,22 @@
 
     <!-- Send feedback -->
     <string name="feedback_subject">GPSTest: Feedback</string>
-    <string name="feedback_body">Жалобы, хвала, и сообщения об ошибках приветствуются!\n\n\n</string>
+    <string name="feedback_body">Отзывы и сообщения об ошибках приветствуются!\n\n\n</string>
     <string name="feedback_error">Невозможно отправить отзыв: на устройстве на найдено подходящее для этого приложение.
     </string>
 
     <!-- What's New -->
     <string name="main_help_whatsnew_title">Что нового?</string>
+    <string name="main_help_whatsnew">&#8226;\u0020
+        <b>Улучшена обратная связь</b>
+        - Почтовое приложение показывается только при отправке отзыва.\n&#8226;\u0020
+        <b>Улучшено \"# Спутников\"</b>
+        - Теперь показывает \"Используется / В прямой видимости (хорошая мощность сигнала) / Всего\", с правильным подсчетом удвоенной частоты.\n&#8226;\u0020
+        <b>Детектируется проблема с переключением недель в GPS</b>
+        - Теперь время подсвечивается красным на устройствах с некорректным временем из-за проблемы с переключением недель в GPS (http://bit.ly/gps-week-rollover).\n&#8226;\u0020
+        <b>Исправления дефектов</b>
+        - См. https://bit.ly/gpstest-releases
+    </string>
     <string name="main_help_close">Закрыть</string>
 
     <!-- Preferences -->
@@ -203,7 +228,7 @@
     <string name="pref_gps_min_time_invalid_entry">Это должно быть число</string>
 
     <string name="pref_use_gnss_apis_title">Использовать ССН API</string>
-    <string name="pref_use_gnss_apis_summary">Доступно на Android 7.0 и далее. Если не выбрано,
+    <string name="pref_use_gnss_apis_summary">Доступно на Android 7.0 и выше. Если не выбрано,
         будет использоваться прежний GPSStatus.Listener.
     </string>
 
@@ -211,10 +236,10 @@
     <string name="pref_gps_min_distance_summary">Минимальное расстояние между фиксацией координат, в метрах
     </string>
     <string name="pref_gps_min_distance_dialog_title">Введите минимальное расстояние, в метрах</string>
-    <string name="pref_gps_min_distance_invalid_entry">Это должно быть число</string>
+    <string name="pref_gps_min_distance_invalid_entry">Мин. расстояние должно быть числом</string>
 
     <string name="pref_stop_gnss_in_background_title">Отключать навигацию в фоне</string>
-    <string name="pref_stop_gnss_in_background_summary">Если отмечено, приложение, перейдя в фоновый режим, отключит навигацию (например, если вы нажали кнопку Дом или перешли в другое приложение)
+    <string name="pref_stop_gnss_in_background_summary">Если отмечено, приложение, перейдя в фоновый режим, отключит навигацию (например, если вы нажали кнопку Домой или перешли в другое приложение)
     </string>
 
     <string name="pref_display_category_title">Отображение</string>
@@ -231,9 +256,9 @@
     <!-- Android Monitor Output -->
     <string name="pref_as_output_category_title">Вывод в Android Monitor</string>
     <string name="pref_nmea_output_title">NMEA</string>
-    <string name="pref_as_nmea_output_summary">Записывает NMEA заключения в Android Studio</string>
+    <string name="pref_as_nmea_output_summary">Записывает NMEA логи в Android Studio</string>
     <string name="pref_nmea_timestamp_output_title">NMEA время</string>
-    <string name="pref_nmea_timestamp_output_summary">Включать вренные отметки NMEA в вывод</string>
+    <string name="pref_nmea_timestamp_output_summary">Включать временные отметки NMEA в вывод</string>
     <string name="pref_measurement_output_title">Запись замеров</string>
     <string name="pref_as_measurement_output_summary">Записывает измерения ССН в Android Studio (Android
  7.0 и выше)
@@ -257,7 +282,7 @@
     <string name="logging_to_new_file">Журналирование в новый файл: %1$s</string>
     <string name="unable_to_close_all_file_streams">Не удаётся закрыть все файловые потоки.</string>
     <string name="could_not_initialize_file">Не удалось инициализировать файл: %1$s</string>
-    <string name="error_writing_file">Запись в файл затруднена</string>
+    <string name="error_writing_file">Проблема с записью в файл </string>
 
     <string name="pref_about_category_title">О приложении</string>
     <string name="pref_show_tutorial_title">Показать инструкцию</string>
@@ -266,6 +291,12 @@
     <string name="pref_dark_theme_title">Использовать тёмное оформление</string>
     <string name="pref_dark_theme_summary">Сделать фон тёмным, а текст светлым цветом
     </string>
+
+    <string name="pref_coordinate_format_title">Формат координат</string>
+    <string name="pref_coordinate_format_summary">Отображать в десятичных градусах, градусах, минутах, секундах или в градусах и десятичных минутах</string>
+    <string name="preferences_coordinate_format_dd">Десятичные градусы</string>
+    <string name="preferences_coordinate_format_dms">Градусы, минуты, десятичные секунды</string>
+    <string name="preferences_coordinate_format_ddm">Градусы, десятичные минуты</string>
 
     <string name="preferences_preferred_distance_units_title">Измерение протяжённости</string>
     <string name="preferences_preferred_distance_units_option_meters">Метры</string>

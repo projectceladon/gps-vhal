@@ -29,6 +29,7 @@ import android.location.GpsStatus;
 import android.location.Location;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.text.format.DateFormat;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -46,20 +47,25 @@ import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AlertDialog;
 import androidx.cardview.widget.CardView;
+import androidx.core.graphics.drawable.DrawableCompat;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.Observer;
+import androidx.lifecycle.ViewModelProviders;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.android.gpstest.model.ConstellationType;
 import com.android.gpstest.model.DilutionOfPrecision;
 import com.android.gpstest.model.GnssType;
+import com.android.gpstest.model.SatelliteMetadata;
 import com.android.gpstest.model.SatelliteStatus;
 import com.android.gpstest.util.CarrierFreqUtils;
-import com.android.gpstest.util.GpsTestUtil;
+import com.android.gpstest.util.DateTimeUtils;
 import com.android.gpstest.util.IOUtils;
 import com.android.gpstest.util.MathUtils;
 import com.android.gpstest.util.NmeaUtils;
 import com.android.gpstest.util.PreferenceUtils;
+import com.android.gpstest.util.SatelliteUtils;
 import com.android.gpstest.util.SortUtil;
 import com.android.gpstest.util.UIUtils;
 
@@ -73,6 +79,7 @@ import static android.util.TypedValue.COMPLEX_UNIT_PX;
 import static com.android.gpstest.model.ConstellationType.GNSS;
 import static com.android.gpstest.model.ConstellationType.SBAS;
 import static com.android.gpstest.model.SatelliteStatus.NO_DATA;
+import static com.android.gpstest.util.CarrierFreqUtils.CF_UNKNOWN;
 
 public class GpsStatusFragment extends Fragment implements GpsTestListener {
 
@@ -91,7 +98,7 @@ public class GpsStatusFragment extends Fragment implements GpsTestListener {
             mAltitudeMslView, mHorVertAccuracyLabelView, mHorVertAccuracyView,
             mSpeedView, mSpeedAccuracyView, mBearingView, mBearingAccuracyView, mNumSats,
             mPdopLabelView, mPdopView, mHvdopLabelView, mHvdopView, mGnssNotAvailableView,
-            mSbasNotAvailableView;
+            mSbasNotAvailableView, mFixTimeErrorView;
 
     private CardView mLocationCard;
 
@@ -109,7 +116,7 @@ public class GpsStatusFragment extends Fragment implements GpsTestListener {
 
     private List<SatelliteStatus> mSbasStatus = new ArrayList<>();
 
-    private int mSvCount, mUsedInFixCount;
+    private int mSvCount;
 
     private String mSnrCn0Title;
 
@@ -130,6 +137,20 @@ public class GpsStatusFragment extends Fragment implements GpsTestListener {
     String mPrefDistanceUnits;
     String mPrefSpeedUnits;
 
+    DeviceInfoViewModel mViewModel;
+
+    private final Observer<SatelliteMetadata> mSatelliteMetadataObserver = new Observer<SatelliteMetadata>() {
+        @Override
+        public void onChanged(@Nullable final SatelliteMetadata satelliteMetadata) {
+            if (satelliteMetadata != null) {
+                mNumSats.setText(mRes.getString(R.string.gps_num_sats_value,
+                        satelliteMetadata.getNumSatsUsed(),
+                        satelliteMetadata.getNumSatsInView(),
+                        satelliteMetadata.getNumSatsTotal()));
+            }
+        }
+    };
+
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
             Bundle savedInstanceState) {
@@ -142,6 +163,8 @@ public class GpsStatusFragment extends Fragment implements GpsTestListener {
         mLatitudeView = v.findViewById(R.id.latitude);
         mLongitudeView = v.findViewById(R.id.longitude);
         mFixTimeView = v.findViewById(R.id.fix_time);
+        mFixTimeErrorView = v.findViewById(R.id.fix_time_error);
+        mFixTimeErrorView.setOnClickListener(view -> showTimeErrorDialog(mFixTime));
         mTTFFView = v.findViewById(R.id.ttff);
         mAltitudeView = v.findViewById(R.id.altitude);
         mAltitudeMslView = v.findViewById(R.id.altitude_msl);
@@ -175,14 +198,17 @@ public class GpsStatusFragment extends Fragment implements GpsTestListener {
 
         mLocationCard = v.findViewById(R.id.status_location_card);
         mLocationCard.setOnClickListener(view -> {
+            final Location location = mLocation;
             // Copy location to clipboard
-            if (mLocation != null) {
+            if (location != null) {
                 boolean includeAltitude = Application.getPrefs().getBoolean(Application.get().getString(R.string.pref_key_share_include_altitude), false);
                 String coordinateFormat = Application.getPrefs().getString(Application.get().getString(R.string.pref_key_coordinate_format), Application.get().getString(R.string.preferences_coordinate_format_dd_key));
-                String formattedLocation = UIUtils.formatLocationForDisplay(mLocation, null, includeAltitude,
+                String formattedLocation = UIUtils.formatLocationForDisplay(location, null, includeAltitude,
                         null, null, null, coordinateFormat);
-                IOUtils.copyToClipboard(formattedLocation);
-                Toast.makeText(getActivity(), R.string.copied_to_clipboard, Toast.LENGTH_LONG).show();
+                if (!TextUtils.isEmpty(formattedLocation)) {
+                    IOUtils.copyToClipboard(formattedLocation);
+                    Toast.makeText(getActivity(), R.string.copied_to_clipboard, Toast.LENGTH_LONG).show();
+                }
             }
         });
 
@@ -214,12 +240,16 @@ public class GpsStatusFragment extends Fragment implements GpsTestListener {
 
         GpsTestActivity.getInstance().addListener(this);
 
+        mViewModel = ViewModelProviders.of(getActivity()).get(DeviceInfoViewModel.class);
+        mViewModel.getSatelliteMetadata().observe(getActivity(), mSatelliteMetadataObserver);
+
         return v;
     }
 
     private void setStarted(boolean navigating) {
         if (navigating != mNavigating) {
             if (!navigating) {
+                mViewModel.reset();
                 mLatitudeView.setText(EMPTY_LAT_LONG);
                 mLongitudeView.setText(EMPTY_LAT_LONG);
                 mFixTime = 0;
@@ -249,8 +279,19 @@ public class GpsStatusFragment extends Fragment implements GpsTestListener {
     private void updateFixTime() {
         if (mFixTime == 0 || (GpsTestActivity.getInstance() != null && !GpsTestActivity.getInstance().mStarted)) {
             mFixTimeView.setText("");
+            mFixTimeErrorView.setText("");
+            mFixTimeErrorView.setVisibility(View.GONE);
         } else {
-            mFixTimeView.setText(mDateFormat.format(mFixTime));
+            if (DateTimeUtils.Companion.isTimeValid(mFixTime)) {
+                mFixTimeErrorView.setVisibility(View.GONE);
+                mFixTimeView.setVisibility(View.VISIBLE);
+                mFixTimeView.setText(mDateFormat.format(mFixTime));
+            } else {
+                // Error in fix time
+                mFixTimeErrorView.setVisibility(View.VISIBLE);
+                mFixTimeView.setVisibility(View.GONE);
+                mFixTimeErrorView.setText(mDateFormat.format(mFixTime));
+            }
         }
     }
 
@@ -259,7 +300,7 @@ public class GpsStatusFragment extends Fragment implements GpsTestListener {
      * @param location
      */
     private void updateLocationAccuracies(Location location) {
-        if (GpsTestUtil.isVerticalAccuracySupported(location)) {
+        if (SatelliteUtils.isVerticalAccuracySupported(location)) {
             mHorVertAccuracyLabelView.setText(R.string.gps_hor_and_vert_accuracy_label);
             if (mPrefDistanceUnits.equalsIgnoreCase(METERS)) {
                 mHorVertAccuracyView.setText(mRes.getString(R.string.gps_hor_and_vert_accuracy_value_meters,
@@ -290,7 +331,7 @@ public class GpsStatusFragment extends Fragment implements GpsTestListener {
      * @param location
      */
     private void updateSpeedAndBearingAccuracies(Location location) {
-        if (GpsTestUtil.isSpeedAndBearingAccuracySupported()) {
+        if (SatelliteUtils.isSpeedAndBearingAccuracySupported()) {
             mSpeedBearingAccuracyRow.setVisibility(View.VISIBLE);
             if (location.hasSpeedAccuracy()) {
                 if (mPrefSpeedUnits.equalsIgnoreCase(METERS_PER_SECOND)) {
@@ -546,18 +587,18 @@ public class GpsStatusFragment extends Fragment implements GpsTestListener {
 
         final int length = status.getSatelliteCount();
         mSvCount = 0;
-        mUsedInFixCount = 0;
         mGnssStatus.clear();
         mSbasStatus.clear();
+        mViewModel.reset();
         while (mSvCount < length) {
-            SatelliteStatus satStatus = new SatelliteStatus(status.getSvid(mSvCount), GpsTestUtil.getGnssConstellationType(status.getConstellationType(mSvCount)),
+            SatelliteStatus satStatus = new SatelliteStatus(status.getSvid(mSvCount), SatelliteUtils.getGnssConstellationType(status.getConstellationType(mSvCount)),
                     status.getCn0DbHz(mSvCount),
                     status.hasAlmanacData(mSvCount),
                     status.hasEphemerisData(mSvCount),
                     status.usedInFix(mSvCount),
                     status.getElevationDegrees(mSvCount),
                     status.getAzimuthDegrees(mSvCount));
-            if (GpsTestUtil.isGnssCarrierFrequenciesSupported()) {
+            if (SatelliteUtils.isGnssCarrierFrequenciesSupported()) {
                 if (status.hasCarrierFrequencyHz(mSvCount)) {
                     satStatus.setHasCarrierFrequency(true);
                     satStatus.setCarrierFrequencyHz(status.getCarrierFrequencyHz(mSvCount));
@@ -565,20 +606,14 @@ public class GpsStatusFragment extends Fragment implements GpsTestListener {
             }
 
             if (satStatus.getGnssType() == GnssType.SBAS) {
-                satStatus.setSbasType(GpsTestUtil.getSbasConstellationType(satStatus.getSvid()));
+                satStatus.setSbasType(SatelliteUtils.getSbasConstellationType(satStatus.getSvid()));
                 mSbasStatus.add(satStatus);
             } else {
                 mGnssStatus.add(satStatus);
             }
-
-            if (satStatus.getUsedInFix()) {
-                mUsedInFixCount++;
-            }
-
             mSvCount++;
         }
-
-        mNumSats.setText(mRes.getString(R.string.gps_num_sats_value, mUsedInFixCount, mSvCount));
+        mViewModel.setStatuses(mGnssStatus, mSbasStatus);
 
         refreshViews();
     }
@@ -599,13 +634,13 @@ public class GpsStatusFragment extends Fragment implements GpsTestListener {
         Iterator<GpsSatellite> satellites = status.getSatellites().iterator();
 
         mSvCount = 0;
-        mUsedInFixCount = 0;
         mGnssStatus.clear();
         mSbasStatus.clear();
+        mViewModel.reset();
         while (satellites.hasNext()) {
             GpsSatellite satellite = satellites.next();
 
-            SatelliteStatus satStatus = new SatelliteStatus(satellite.getPrn(), GpsTestUtil.getGnssType(satellite.getPrn()),
+            SatelliteStatus satStatus = new SatelliteStatus(satellite.getPrn(), SatelliteUtils.getGnssType(satellite.getPrn()),
                     satellite.getSnr(),
                     satellite.hasAlmanac(),
                     satellite.hasEphemeris(),
@@ -614,18 +649,15 @@ public class GpsStatusFragment extends Fragment implements GpsTestListener {
                     satellite.getAzimuth());
 
             if (satStatus.getGnssType() == GnssType.SBAS) {
-                satStatus.setSbasType(GpsTestUtil.getSbasConstellationTypeLegacy(satStatus.getSvid()));
+                satStatus.setSbasType(SatelliteUtils.getSbasConstellationTypeLegacy(satStatus.getSvid()));
                 mSbasStatus.add(satStatus);
             } else {
                 mGnssStatus.add(satStatus);
             }
-            if (satellite.usedInFix()) {
-                mUsedInFixCount++;
-            }
             mSvCount++;
         }
 
-        mNumSats.setText(mRes.getString(R.string.gps_num_sats_value, mUsedInFixCount, mSvCount));
+        mViewModel.setStatuses(mGnssStatus, mSbasStatus);
 
         refreshViews();
     }
@@ -721,6 +753,26 @@ public class GpsStatusFragment extends Fragment implements GpsTestListener {
                     setSortByClause(index);
                     dialog.dismiss();
                 });
+        AlertDialog dialog = builder.create();
+        dialog.setOwnerActivity(getActivity());
+        dialog.show();
+    }
+
+    private void showTimeErrorDialog(long time) {
+        java.text.DateFormat format = SimpleDateFormat.getDateTimeInstance(java.text.DateFormat.LONG, java.text.DateFormat.LONG);
+
+        TextView textView = (TextView) getLayoutInflater().inflate(R.layout.error_text_dialog, null);
+        textView.setText(getString(R.string.error_time_message, format.format(time), DateTimeUtils.Companion.getNUM_DAYS_TIME_VALID()));
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
+        builder.setTitle(R.string.error_time_title);
+        builder.setView(textView);
+        Drawable drawable = getResources().getDrawable(android.R.drawable.ic_dialog_alert);
+        DrawableCompat.setTint(drawable, getResources().getColor(R.color.colorPrimary));
+        builder.setIcon(drawable);
+        builder.setNeutralButton(R.string.main_help_close,
+                (dialog, which) -> dialog.dismiss()
+        );
         AlertDialog dialog = builder.create();
         dialog.setOwnerActivity(getActivity());
         dialog.show();
@@ -839,7 +891,7 @@ public class GpsStatusFragment extends Fragment implements GpsTestListener {
                 } else {
                     v.getFlagHeader().setText(mRes.getString(R.string.sbas_flag_image_label));
                 }
-                if (GpsTestUtil.isGnssCarrierFrequenciesSupported()) {
+                if (SatelliteUtils.isGnssCarrierFrequenciesSupported()) {
                     v.getCarrierFrequency().setVisibility(View.VISIBLE);
                     v.getCarrierFrequency().setText(mRes.getString(R.string.gps_carrier_column_label));
                     v.getCarrierFrequency().setTypeface(v.getCarrierFrequency().getTypeface(), Typeface.BOLD);
@@ -907,14 +959,10 @@ public class GpsStatusFragment extends Fragment implements GpsTestListener {
                         v.getFlag().setVisibility(View.INVISIBLE);
                         break;
                 }
-                if (GpsTestUtil.isGnssCarrierFrequenciesSupported()) {
-                    if (sats.get(dataRow).getCarrierFrequencyHz() != NO_DATA) {
-                        // Convert Hz to MHz
-                        float carrierMhz = MathUtils.toMhz(sats.get(dataRow).getCarrierFrequencyHz());
-                        String carrierLabel = CarrierFreqUtils.getCarrierFrequencyLabel(sats.get(dataRow).getGnssType(),
-                                sats.get(dataRow).getSvid(),
-                                carrierMhz);
-                        if (carrierLabel != null) {
+                if (SatelliteUtils.isGnssCarrierFrequenciesSupported()) {
+                    if (sats.get(dataRow).getHasCarrierFrequency()) {
+                        String carrierLabel = CarrierFreqUtils.getCarrierFrequencyLabel(sats.get(dataRow));
+                        if (!carrierLabel.equals(CF_UNKNOWN)) {
                             // Make sure it's the normal text size (in case it's previously been
                             // resized to show raw number).  Use another TextView for default text size.
                             v.getCarrierFrequency().setTextSize(COMPLEX_UNIT_PX, v.getSvId().getTextSize());
@@ -923,7 +971,8 @@ public class GpsStatusFragment extends Fragment implements GpsTestListener {
                         } else {
                             // Shrink the size so we can show raw number
                             v.getCarrierFrequency().setTextSize(COMPLEX_UNIT_DIP, 10);
-                            // Show raw number for carrier frequency
+                            // Show raw number for carrier frequency - Convert Hz to MHz
+                            float carrierMhz = MathUtils.toMhz(sats.get(dataRow).getCarrierFrequencyHz());
                             v.getCarrierFrequency().setText(String.format("%.3f", carrierMhz));
                         }
                     } else {

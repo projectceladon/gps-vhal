@@ -23,6 +23,7 @@ import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.location.Location;
 import android.net.Uri;
 import android.os.Build;
@@ -46,6 +47,7 @@ import com.google.android.material.button.MaterialButton;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 
+import java.io.File;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.concurrent.TimeUnit;
@@ -249,7 +251,7 @@ public class UIUtils {
             body.append("Location: " + location + "\n");
         }
 
-        body.append(GpsTestUtil.getGnssHardwareYear() + "\n");
+        body.append(IOUtils.getGnssHardwareYear() + "\n");
 
         // Raw GNSS measurement capability
         int capability = Application.getPrefs().getInt(Application.get().getString(R.string.capability_key_raw_measurements), PreferenceUtils.CAPABILITY_UNKNOWN);
@@ -269,10 +271,10 @@ public class UIUtils {
             body.append(Application.get().getString(R.string.capability_title_nmea, PreferenceUtils.getCapabilityDescription(capability)));
         }
 
-        // Inject XTRA capability
-        capability = Application.getPrefs().getInt(Application.get().getString(R.string.capability_key_inject_xtra), PreferenceUtils.CAPABILITY_UNKNOWN);
+        // Inject PSDS capability
+        capability = Application.getPrefs().getInt(Application.get().getString(R.string.capability_key_inject_psds), PreferenceUtils.CAPABILITY_UNKNOWN);
         if (capability != PreferenceUtils.CAPABILITY_UNKNOWN) {
-            body.append(Application.get().getString(R.string.capability_title_inject_xtra, PreferenceUtils.getCapabilityDescription(capability)));
+            body.append(Application.get().getString(R.string.capability_title_inject_psds, PreferenceUtils.getCapabilityDescription(capability)));
         }
 
         // Inject time capability
@@ -294,14 +296,15 @@ public class UIUtils {
 
         body.append("\n\n\n");
 
-        Intent send = new Intent(Intent.ACTION_SEND);
+        Intent send = new Intent(Intent.ACTION_SENDTO);
+        send.setData(Uri.parse("mailto:"));
         send.putExtra(Intent.EXTRA_EMAIL, new String[]{email});
 
         String subject = context.getString(R.string.feedback_subject);
 
         send.putExtra(Intent.EXTRA_SUBJECT, subject);
         send.putExtra(Intent.EXTRA_TEXT, body.toString());
-        send.setType("message/rfc822");
+
         try {
             context.startActivity(createChooser(send, subject));
         } catch (ActivityNotFoundException e) {
@@ -477,7 +480,7 @@ public class UIUtils {
      * @param alternateFileUri The URI for a file if a file other than the one current used by the FileLogger should be used (e.g., one previously picked from the folder browse button), or null if no alternate file is chosen and the file from the file logger should be shared.
      * @return a dialog for sharing location and files
      */
-    public static Dialog createShareDialog(AppCompatActivity activity, Location location,
+    public static Dialog createShareDialog(AppCompatActivity activity, final Location location,
                                            boolean loggingEnabled, FileLogger fileLogger,
                                            Uri alternateFileUri) {
         View view = activity.getLayoutInflater().inflate(R.layout.share, null);
@@ -549,16 +552,20 @@ public class UIUtils {
         });
         chipDMS.setOnCheckedChangeListener((view1, isChecked) -> {
             if (isChecked) {
-                locationValue.setText(IOUtils.createLocationShare(UIUtils.getDMSFromLocation(Application.get(), location.getLatitude(), UIUtils.COORDINATE_LATITUDE),
-                        UIUtils.getDMSFromLocation(Application.get(), location.getLongitude(), UIUtils.COORDINATE_LONGITUDE),
-                        location.hasAltitude() && includeAltitude.isChecked() ? Double.toString(location.getAltitude()) : null));
+                if (location != null) {
+                    locationValue.setText(IOUtils.createLocationShare(UIUtils.getDMSFromLocation(Application.get(), location.getLatitude(), UIUtils.COORDINATE_LATITUDE),
+                            UIUtils.getDMSFromLocation(Application.get(), location.getLongitude(), UIUtils.COORDINATE_LONGITUDE),
+                            location.hasAltitude() && includeAltitude.isChecked() ? Double.toString(location.getAltitude()) : null));
+                }
             }
         });
         chipDegreesDecimalMin.setOnCheckedChangeListener((view1, isChecked) -> {
             if (isChecked) {
-                locationValue.setText(IOUtils.createLocationShare(UIUtils.getDDMFromLocation(Application.get(), location.getLatitude(), UIUtils.COORDINATE_LATITUDE),
-                        UIUtils.getDDMFromLocation(Application.get(), location.getLongitude(), UIUtils.COORDINATE_LONGITUDE),
-                        location.hasAltitude() && includeAltitude.isChecked() ? Double.toString(location.getAltitude()) : null));
+                if (location != null) {
+                    locationValue.setText(IOUtils.createLocationShare(UIUtils.getDDMFromLocation(Application.get(), location.getLatitude(), UIUtils.COORDINATE_LATITUDE),
+                            UIUtils.getDDMFromLocation(Application.get(), location.getLongitude(), UIUtils.COORDINATE_LONGITUDE),
+                            location.hasAltitude() && includeAltitude.isChecked() ? Double.toString(location.getAltitude()) : null));
+                }
             }
         });
 
@@ -592,21 +599,29 @@ public class UIUtils {
             }
         });
         locationShare.setOnClickListener(v -> {
-            // Send the location as a Geo URI (e.g., in an email)
+            // Send the location as a Geo URI (e.g., in an email) if the user has decimal degrees
+            // selected, otherwise send plain text version
             if (location != null) {
                 Intent intent = new Intent(Intent.ACTION_SEND);
-                String geoUri = IOUtils.createGeoUri(location, includeAltitude.isChecked());
-                intent.putExtra(Intent.EXTRA_TEXT, geoUri);
+                String text;
+                if (chipDecimalDegrees.isChecked()) {
+                    text = IOUtils.createGeoUri(location, includeAltitude.isChecked());
+                } else {
+                    text = locationValue.getText().toString();
+                }
+                intent.putExtra(Intent.EXTRA_TEXT, text);
                 intent.setType("text/plain");
                 activity.startActivity(createChooser(intent, Application.get().getString(R.string.share)));
             }
         });
 
-        if (loggingEnabled) {
-            // Hide the logging instructions
+        final File file = fileLogger.getFile();
+
+        if (loggingEnabled && file != null) {
+            // Hide the logging instructions - logging is enabled and working
             logInstructions.setVisibility(View.GONE);
         } else {
-            // Hide the logging and file views
+            // Hide the logging and file views so the user can see the instructions
             fileName.setVisibility(View.GONE);
             logBrowse.setVisibility(View.GONE);
             logShare.setVisibility(View.GONE);
@@ -614,15 +629,20 @@ public class UIUtils {
 
         // Set the log file name
         if (loggingEnabled) {
-            if (alternateFileUri == null) {
-                // Set the log file currently being logged to by the FileLogger
-                fileName.setText(fileLogger.getFile().getName());
+            if (file != null) {
+                if (alternateFileUri == null) {
+                    // Set the log file currently being logged to by the FileLogger
+                    fileName.setText(file.getName());
+                } else {
+                    // Set the log file selected by the user using the File Browse button
+                    String lastPathSegment = alternateFileUri.getLastPathSegment();
+                    // Parse file name from string like "primary:gnss_log/gnss_log_2019..."
+                    String[] parts = lastPathSegment.split("/");
+                    fileName.setText(parts[parts.length - 1]);
+                }
             } else {
-                // Set the log file selected by the user using the File Browse button
-                String lastPathSegment = alternateFileUri.getLastPathSegment();
-                // Parse file name from string like "primary:gnss_log/gnss_log_2019..."
-                String[] parts = lastPathSegment.split("/");
-                fileName.setText(parts[1]);
+                // Something went wrong - did user allow file/storage permissions when prompted when they enabled logging in Settings?
+                logInstructions.setText(R.string.log_error);
             }
         }
 
@@ -644,7 +664,6 @@ public class UIUtils {
             } else {
                 // Send the log file selected by the user using the File Browse button
                 IOUtils.sendLogFile(activity, alternateFileUri);
-
             }
         });
 
@@ -652,11 +671,11 @@ public class UIUtils {
     }
 
     /**
-     * Returns the provided location based on the provided coordinate format, and sets the provided Views (locationValue, chips) accordingly if views are provided,
-     * and returns the string value.
+     * Returns the provided location based on the provided coordinate format, and sets the provided
+     * Views (textView, chips) accordingly if views are provided, and returns the string value.
      *
      * @param location              location to be formatted
-     * @param locationValue         View to be set with the selected coordinateFormat
+     * @param textView              View to be set with the selected coordinateFormat
      * @param includeAltitude       true if altitude should be included, false if it should not
      * @param chipDecimalDegrees    View to be set as checked if "dd" is the coordinateFormat
      * @param chipDMS               View to be set as checked if "dms" is the coordinateFormat
@@ -664,8 +683,8 @@ public class UIUtils {
      * @param coordinateFormat      dd, dms, or ddm
      * @return the provided location based on the provided coordinate format
      */
-    public static String formatLocationForDisplay(Location location, TextView locationValue, boolean includeAltitude, Chip chipDecimalDegrees, Chip chipDMS, Chip chipDegreesDecimalMin, String coordinateFormat) {
-        String formattedLocation;
+    public static String formatLocationForDisplay(Location location, TextView textView, boolean includeAltitude, Chip chipDecimalDegrees, Chip chipDMS, Chip chipDegreesDecimalMin, String coordinateFormat) {
+        String formattedLocation = "";
         switch (coordinateFormat) {
             // Constants below must match string values in do_not_translate.xml
             case "dd":
@@ -677,18 +696,22 @@ public class UIUtils {
                 break;
             case "dms":
                 // Degrees minutes seconds
-                formattedLocation = IOUtils.createLocationShare(UIUtils.getDMSFromLocation(Application.get(), location.getLatitude(), UIUtils.COORDINATE_LATITUDE),
-                        UIUtils.getDMSFromLocation(Application.get(), location.getLongitude(), UIUtils.COORDINATE_LONGITUDE),
-                        (location.hasAltitude() && includeAltitude) ? Double.toString(location.getAltitude()) : null);
+                if (location != null) {
+                    formattedLocation = IOUtils.createLocationShare(UIUtils.getDMSFromLocation(Application.get(), location.getLatitude(), UIUtils.COORDINATE_LATITUDE),
+                            UIUtils.getDMSFromLocation(Application.get(), location.getLongitude(), UIUtils.COORDINATE_LONGITUDE),
+                            (location.hasAltitude() && includeAltitude) ? Double.toString(location.getAltitude()) : null);
+                }
                 if (chipDMS != null) {
                     chipDMS.setChecked(true);
                 }
                 break;
             case "ddm":
                 // Degrees decimal minutes
-                formattedLocation = IOUtils.createLocationShare(UIUtils.getDDMFromLocation(Application.get(), location.getLatitude(), UIUtils.COORDINATE_LATITUDE),
-                        UIUtils.getDDMFromLocation(Application.get(), location.getLongitude(), UIUtils.COORDINATE_LONGITUDE),
-                        (location.hasAltitude() && includeAltitude) ? Double.toString(location.getAltitude()) : null);
+                if (location != null) {
+                    formattedLocation = IOUtils.createLocationShare(UIUtils.getDDMFromLocation(Application.get(), location.getLatitude(), UIUtils.COORDINATE_LATITUDE),
+                            UIUtils.getDDMFromLocation(Application.get(), location.getLongitude(), UIUtils.COORDINATE_LONGITUDE),
+                            (location.hasAltitude() && includeAltitude) ? Double.toString(location.getAltitude()) : null);
+                }
                 if (chipDegreesDecimalMin != null) {
                     chipDegreesDecimalMin.setChecked(true);
                 }
@@ -701,8 +724,8 @@ public class UIUtils {
                 }
                 break;
         }
-        if (locationValue != null) {
-            locationValue.setText(formattedLocation);
+        if (textView != null) {
+            textView.setText(formattedLocation);
         }
         return formattedLocation;
     }
@@ -721,5 +744,15 @@ public class UIUtils {
         } catch (PackageManager.NameNotFoundException e) {
             e.printStackTrace();
         }
+    }
+
+    /**
+     * Returns true if the app is running on a large screen device, false if it is not
+     *
+     * @return true if the app is running on a large screen device, false if it is not
+     */
+    public static boolean isLargeScreen(Context context) {
+        return (context.getResources().getConfiguration().screenLayout
+                & Configuration.SCREENLAYOUT_SIZE_MASK) >= Configuration.SCREENLAYOUT_SIZE_XLARGE;
     }
 }

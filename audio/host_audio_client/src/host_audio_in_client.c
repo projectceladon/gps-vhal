@@ -51,6 +51,7 @@ typedef struct
     pthread_t audio_thread_id; //Audio in data thread
     int loop_quit;             // Control audio_in_thread
     int enable_socket_connect_log;
+    int data_block;
 
 } ClientAudioInSocketInfo;
 
@@ -59,12 +60,13 @@ void *receive_server_command_thread(void *args);
 static int connect_audio_out_server(ClientAudioInSocketInfo *caisi);
 void *audio_in_thread(void *args);
 
-char *const short_options = "hs:p:c:";
+char *const short_options = "hs:p:c:d";
 struct option long_options[] = {
     {"help", 1, NULL, 'h'},
     {"server-ip", 1, NULL, 's'},
     {"port", 1, NULL, 'p'},
     {"pcm-file", 1, NULL, 'c'},
+    {"data-block", 1, NULL, 'd'},
     {0, 0, 0, 0},
 };
 
@@ -81,6 +83,7 @@ int main(int argc, char *argv[])
     strncpy(_caisi->server_ip, "172.100.0.2", sizeof(_caisi->server_ip));
     _caisi->port = 8767;
     strncpy(_caisi->pcm_file, "./yrzr_8000_mono.pcm", sizeof(_caisi->pcm_file));
+    _caisi->data_block = 0;
 
     while ((c = getopt_long(argc, argv, short_options, long_options, &index)) != -1)
     {
@@ -90,7 +93,8 @@ int main(int argc, char *argv[])
             printf("%s\t-h, --help help\n"
                    "\t-s, --server-ip server-ip\n"
                    "\t-p, --port\n"
-                   "\t-c, --pcm-file\n",
+                   "\t-c, --pcm-file\n"
+                   "\t-d, --data-block\n",
                    argv[0]);
             break;
         case 's':
@@ -108,11 +112,17 @@ int main(int argc, char *argv[])
             strncpy(_caisi->pcm_file, p_opt_arg, sizeof(_caisi->pcm_file));
             printf("Set _caisi->pcm_file to %s\n", _caisi->pcm_file);
             break;
+        case 'd':
+            _caisi->data_block = 1;
+            printf("Enable _caisi->data_block\n");
+            break;
         default:
             printf("Enock: c = %c, index =%d \n", c, index);
         }
     }
-    printf("%s _caisi->server_ip = %s _caisi->port = %d _caisi->pcm_file: %s\n", __func__, _caisi->server_ip, _caisi->port, _caisi->pcm_file);
+    printf("%s _caisi->server_ip = %s _caisi->port = %d _caisi->pcm_file: %s "
+           "_caisi->data_block = %d\n",
+           __func__, _caisi->server_ip, _caisi->port, _caisi->pcm_file, _caisi->data_block);
 
     while (1)
     {
@@ -152,6 +162,16 @@ int main(int argc, char *argv[])
                 pthread_join(accept_thread_id, NULL);
                 accept_thread_flag = 0;
             };
+        }
+        if (strcmp(str, "dbe") == 0)
+        {
+            printf("%s dbe(data_block enable)\n", __func__);
+            _caisi->data_block = 1;
+        }
+        if (strcmp(str, "dbd") == 0)
+        {
+            printf("%s dbd(data_block disenable)\n", __func__);
+            _caisi->data_block = 0;
         }
     }
 
@@ -331,29 +351,39 @@ void *audio_in_thread(void *args)
                 break;
             }
         }
-        printf("%s FIXME: read audio in data from the client device. buffer_size: %zd\n", __func__, buffer_size);
-        ret = fread(buffer, buffer_size, 1, file_pcm);
-        if (ret < 0)
+        if (caisi->data_block)
         {
-            printf("%s: %d Fail to read %s. %s\n", __func__, __LINE__, caisi->pcm_file, strerror(errno));
-            break;
+            printf("%s emulate data block. Donnot send data. Sleep 10 ms.\n", __func__);
+            usleep(10 * 1000);
         }
-
-        if (ret > 0)
+        else
         {
-            do
+
+            printf("%s FIXME: read audio in data from the client device. buffer_size: %zd\n", __func__, buffer_size);
+            ret = fread(buffer, buffer_size, 1, file_pcm);
+            if (ret < 0)
             {
-                ret = write(caisi->sock_client_fd, buffer, buffer_size);
-            } while (ret < 0 && errno == EINTR && caisi->loop_quit == 0);
-            if (ret == 0)
-            {
-                printf("%s:%d the audio out socket server may close.\n", __func__, __LINE__);
-                goto FAIL;
+                printf("%s: %d Fail to read %s. %s\n", __func__, __LINE__, caisi->pcm_file, strerror(errno));
+                break;
             }
+
             if (ret > 0)
             {
-                printf("%s Write %zd data to the audio in server.\n", __func__, ret);
+                do
+                {
+                    ret = write(caisi->sock_client_fd, buffer, buffer_size);
+                } while (ret < 0 && errno == EINTR && caisi->loop_quit == 0);
+                if (ret == 0)
+                {
+                    printf("%s:%d the audio out socket server may close.\n", __func__, __LINE__);
+                    goto FAIL;
+                }
+                if (ret > 0)
+                {
+                    printf("%s Write %zd data to the audio in server.\n", __func__, ret);
+                }
             }
+            usleep(10 * 1000);
         }
     }
 

@@ -25,7 +25,7 @@
 
     <!-- Navigation Drawer -->
     <string name="navdrawer_separator_assist_data">Modifica dati di assistenza</string>
-    <string name="force_xtra_injection">Inserisci dati XTRA</string>
+    <string name="force_psds_injection">Inserisci dati PSDS</string>
     <string name="force_time_injection">Inserisci dati NTP</string>
     <string name="delete_aiding_data">Rimuovi dati di assistenza</string>
     <string name="navdrawer_item_settings">Impostazioni</string>
@@ -53,8 +53,8 @@
     <string name="force_time_injection_success">Dati temporali NTP inseriti con successo</string>
     <string name="force_time_injection_failure">Il dispositivo non supporta l\'inserimento di dati temporali NTP</string>
 
-    <string name="force_xtra_injection_success">Dati XTRA inseriti con successo</string>
-    <string name="force_xtra_injection_failure">Il dispositivo non supporta l\'inserimento di dati XTRA</string>
+    <string name="force_psds_injection_success">Dati PSDS inseriti con successo</string>
+    <string name="force_psds_injection_failure">Il dispositivo non supporta l\'inserimento di dati PSDS</string>
 
     <string name="zoom_in">Zoom +</string>
     <string name="zoom_out">Zoom -</string>
@@ -67,7 +67,7 @@
     <string name="gps_ttff_label">TTPL:</string>
     <string name="gps_altitude_label">Alt.:</string>
     <string name="gps_altitude_msl_label">Alt. (s.l.m.):</string>
-    <string name="gps_accuracy_label">Precisione:</string>
+    <string name="gps_accuracy_label">Prec. orizz.:</string>
     <string name="gps_hor_and_vert_accuracy_label">Prec. o/v:</string>
     <string name="gps_speed_label">Velocità:</string>
     <string name="gps_speed_acc_label">Prec. vel.:</string>
@@ -99,7 +99,8 @@
     <string name="clear_assist_warning">Alcuni dispositivi possono impiegare 24 ore per aggiornare in automatico i dati di assistenza. Se il tuo dispositivo non supporta l\'inserimento manuale, il sistema di geolocalizzazione tramite GNSS potrebbe non funzionare in nessuna applicazione finché l\'aggiornamento automatico non sarà completato. Vuoi procedere?</string>
     <string name="never_ask_again">Non chiedere più</string>
     <string name="qr_code_instructions_title">Scansiona un QR Code</string>
-    <string name="qr_code_instructions_text">Importa la posizione reale con l\'utilizzo di un QR Code nel formato Geo URI (es.: geo:28.38434,-87.24334).
+    <string name="qr_code_instructions_text">Importa la posizione reale con l\'utilizzo di un QR Code nel formato Geo URI (es.:
+\"geo:28.38434,-87.24334\").
 Crea il tuo QR Code qui: https://zxing.appspot.com/generator/.</string>
     <string name="qr_code_cannot_read_code">Impossibile leggere il riferimento Geo URI dal QR Code</string>
     <string name="never_show_again">Non mostrare più</string>
@@ -109,6 +110,8 @@ Crea il tuo QR Code qui: https://zxing.appspot.com/generator/.</string>
     <string name="gnss_not_available">Sistema Globale di Navigazione Satellitare (GNSS)</string>
     <string name="sbas_not_available">Nessun segnale SBAS disponibile</string>
     <string name="menu_option_sort_by">Ordina per</string>
+    <string name="error_time_title">Il tuo orario GNSS è sbagliato</string>
+    <string name="error_time_message">L\'orario fornito dal sistema GNSS: \n\n%1$s\n\n differisce dall\'orario impostato sul device per più di %2$d giorni. Questo può essere causato dal problema conosciuto come \"GPS week rollover issue\". Rivolgiti al produttore del tuo device per maggiori chiarimenti. Per ulteriori informazioni: http://bit.ly/gps-week-rollover.</string>
 
     <!-- Map view -->
     <string name="ground_truth_latitude">Latitudine</string>
@@ -140,9 +143,9 @@ Crea il tuo QR Code qui: https://zxing.appspot.com/generator/.</string>
     <string name="sky_legend_shape_gnss_title">Sistema Globale di Navigazione Satellitare (GNSS)</string>
     <string name="sky_legend_shape_navstar">GPS NAVSTAR (USA)</string>
     <string name="sky_legend_shape_glonass">GLONASS (Russia)</string>
-    <string name="sky_legend_shape_galileo">Galileo (UE)</string>
+    <string name="sky_legend_shape_galileo">GALILEO (UE)</string>
     <string name="sky_legend_shape_qzss">QZSS (Giappone)</string>
-    <string name="sky_legend_shape_beidou">BeiDou/COMPASS (Cina)</string>
+    <string name="sky_legend_shape_beidou">BEIDOU/COMPASS (Cina)</string>
     <string name="sky_legend_shape_irnss">IRNSS (India)</string>
 
     <string name="sky_legend_shape_sbas_title">Sistema di Aumento della Precisione tramite Satelliti (SBAS)</string>
@@ -183,22 +186,6 @@ Crea il tuo QR Code qui: https://zxing.appspot.com/generator/.</string>
 
     <!-- What's New -->
     <string name="main_help_whatsnew_title">Novità</string>
-    <string name="main_help_whatsnew">&#8226;\u0020
-        <b>Supporto per IRNSS</b>
-        - Possibilità di vedere i segnali del sistema GNSS Indiano su tutti i device compatibili con IRNSS;\n&#8226;\u0020
-        <b>Registra dati</b>
-        - Abilita la registrazione dei dati nel menù Impostazioni per i dati NMEA, le misurazioni di base, i messaggi di navigazione e i segnali di localizzazione. Per maggiori informazioni: http://bit.ly/gpstest-file for details;\n&#8226;\u0020
-        <b>Miglioramento opzioni di condivisione</b>
-        - Condividi le tue coordinate in vari modi (copia negli appunti, sito GeoHack, apri in altre app, condividi tramite email/ messaggio), inoltre è possibile inviare il file di registro dati tramite email;\n&#8226;\u0020
-        <b>Copia coordinate negli appunti</b>
-        - Clicca sul tab delle coordinate nella Scheda Stato per copiare le tue coordinate negli appunti;\n&#8226;\u0020
-        <b>Supporto del formato DM (gradi minuti decimali)</b>
-        - Imposta questo popolare formato di geocaching nelle Impostazioni;\n&#8226;\u0020
-        <b>Scansione QR Code per impostare la posizione reale</b>
-        -  Imposta la tua posizione reale in modo rapido utilizzando i codici QR. Per maggiori informazioni: http://bit.ly/gpstest-qr-codes for details.\n&#8226;\u0020
-        <b>Bug fixes</b>
-        - Per maggiori informazioni: https://bit.ly/gpstest-releases.
-    </string>
     <string name="main_help_close">Chiudi</string>
 
     <!-- Preferences -->
@@ -225,7 +212,7 @@ Crea il tuo QR Code qui: https://zxing.appspot.com/generator/.</string>
     <string name="pref_gps_min_time_invalid_entry">L\'intervallo deve essere un numero</string>
 
     <string name="pref_use_gnss_apis_title">Usa le API GNSS</string>
-    <string name="pref_use_gnss_apis_summary">Disponibile con Android 7.0 e successivi. Se disattivato, utilizza le informazioni GPS Legacy</string>
+    <string name="pref_use_gnss_apis_summary">Disponibile con Android 7.0 e successivi. Se disattivato, utilizza le informazioni GNSS Legacy</string>
 
     <string name="pref_gps_min_distance_title">Distanza minima</string>
     <string name="pref_gps_min_distance_summary">Distanza minima geolocalizzazione (in metri)</string>
@@ -320,8 +307,8 @@ Crea il tuo QR Code qui: https://zxing.appspot.com/generator/.</string>
         - Altitudine (espressa in metri rispetto all\'ellissoide WGS84).\n&#8226;\u0020
         <b>Alt. (s.l.m.)</b>
         - Altitudine (espressa in metri sopra il livello del mare). Richiede il supporto NMEA.\n&#8226;\u0020
-        <b>Precisione</b>
-        - Precisione della posizione stimata con il 68% di confidenza (espressa in metri).
+        <b>Prec. orizz.</b>
+        - Precisione orizzontale della posizione stimata con il 68% di confidenza (espressa in metri).
 Esempio: tracciando una circonferenza centrata nel punto determinato da latitudine e longitudine della posizione stimata dal nostro dispositivo e con un raggio pari al valore della precisione, allora c\'è il 68% di probabilità che la posizione reale sia interna alla circonferenza così tracciata.
 Per ulteriori informazioni: https://medium.com/@sjbarbeau/measuring-gnss-accuracy-on-android-devices-6824492a1389.\n&#8226;\u0020
         <b>Prec. o/v</b>
@@ -340,7 +327,8 @@ Non dipende dall\'orientamento del dispositivo.\n&#8226;\u0020
         - Precisione della direzione orizzontale stimata con il 68% di confidenza (espressa in gradi).
 Esempio, se la direzione stimata dal nostro dispositivo è di 60° e la precisione della direzione è 10°, allora c\'è il 68% di probabilità che la direzione reale sia compresa tra 50 e 70 gradi.\n&#8226;\u0020
         <b>n° Sat.</b>
-        - Numero di satelliti usati per il posizionamento / Numero di satelliti in vista.\n&#8226;\u0020
+        - Numero di satelliti usati per il posizionamento / Numero di satelliti in vista (con valori validi di intensità segnale) / Numero di satelliti conosciuti dal dispositivo.
+Sui device a doppia frequenza un satellite appare come \"usato per il posizionamento\" se almeno una frequenza proveniente da quel satellite è in uso; un satellite appare come \"in vista\" se almeno una frequenza ha ha un valore valido di intensità segnale; un satellite appare come \"conosciuto dal dispositivo\" se c\'è almeno un segnale proveniente da quel satellite.\n&#8226;\u0020
         <b>DOP</b>
         - Diluizione della precisione. Richiede il supporto NMEA.\n&#8226;\u0020
         <b>DOP o/v</b>
@@ -394,11 +382,11 @@ Per i satelliti SBAS, le specifiche di Android non dichiarano se (U) si riferisc
         - Le misurazioni dell\'errore verticale, a differenza di quelle dell\'errore orizzontale, possono essere positive o negative. La scheda Precisione mostra l\'errore verticale e l\'errore verticale medi, calcolati entrambi usando il valore assoluto della misura dell\'errore.\n\n
 
         &#8226;\u0020 Imposta rapidamente la tua posizione reale utilizzando i QR Code.
-Per ulteriori informazioni: http://bit.ly/gpstest-qr-codes for details.\n\n
+Per ulteriori informazioni: https://bit.ly/gpstest-qr-codes for details.\n\n
 
         <b>*** Registro attività ***</b>\n\n
         &#8226;\u0020 Abilita il registro attività dal menù Impostazioni. Verranno registrati i dati NMEA, le misurazioni di base, i messaggi di navigazione e i segnali di localizzazione.
-Per ulteriori informazioni: http://bit.ly/gpstest-file for details.\n\n
+Per ulteriori informazioni: https://bit.ly/gpstest-file.\n\n
 
         <b>*** Riconoscimenti ***</b>\n\n
         &#8226;\u0020 <b>Mike Lockwood</b> - sviluppatore originale della versione v1.x\n
