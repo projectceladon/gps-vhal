@@ -39,3 +39,11 @@ add_executable(host_audio_in_client
 target_link_libraries(host_audio_in_client
   pthread
 )
+
+add_executable(host_audio_in_client_unix
+  src/host_audio_in_client_unix.c
+)
+target_link_libraries(host_audio_in_client_unix
+  pthread
+)
+
