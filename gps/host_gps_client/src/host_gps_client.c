@@ -89,8 +89,8 @@ int main(int argc, char *argv[])
     printf("Set default value:\n");
     strncpy(_gps_socket_info->server_ip, "172.100.0.2", 20);
     _gps_socket_info->port = 8766;
-    _gps_socket_info->gps_lat = 121.38215;
-    _gps_socket_info->gps_long = 31.07147;
+    _gps_socket_info->gps_long = 121.38215;
+    _gps_socket_info->gps_lat = 31.07147;
     _gps_socket_info->gps_alt = 4;
     _gps_socket_info->loop_exit = 0;
 
@@ -378,31 +378,43 @@ void *injection_gps_data_thread(void *args)
     char lat_long[32];
     size_t lat_long_len = 0;
     int ret = 0;
+    int long_max = _gps_socket_info->gps_long + 1;
+    long_max = long_max < -180 ? -180 : long_max;
+    long_max = long_max > 180 ? 180 : long_max;
+
+    int lat_max = _gps_socket_info->gps_lat + 1;
+    lat_max = lat_max < -90 ? -90 : lat_max;
+    lat_max = lat_max > 90 ? 90 : lat_max;
+
+    int alt_max = _gps_socket_info->gps_alt + 1000;
+    alt_max = alt_max < -400 ? -400 : alt_max;
+    alt_max = alt_max > 8848 ? 8848 : alt_max;
 
     while (!g->loop_quit)
     {
         printf("%s FIXME: Replace the data by real data.\n", __func__);
         memset(lat_long, 0, sizeof(lat_long));
-        g->gps_lat = g->gps_lat + 0.00001;
-        if (g->gps_lat > 122.38215)
-        {
-            g->gps_lat = 121.38215;
-        }
         _gps_socket_info->gps_long = _gps_socket_info->gps_long + 0.00001;
-        if (_gps_socket_info->gps_long > 32.07147)
+        if (_gps_socket_info->gps_long > long_max)
         {
-            _gps_socket_info->gps_long = 31.07147;
+            _gps_socket_info->gps_long = long_max;
+        }
+        g->gps_lat = g->gps_lat + 0.00001;
+        if (g->gps_lat > lat_max)
+        {
+            g->gps_lat = lat_max;
         }
         _gps_socket_info->gps_alt = _gps_socket_info->gps_alt + 1;
-        if (_gps_socket_info->gps_alt > 9)
+        if (_gps_socket_info->gps_alt > alt_max)
         {
-            _gps_socket_info->gps_alt = 4;
+            _gps_socket_info->gps_alt = alt_max;
         }
-        lat_long_len = sprintf(lat_long, "%.5f %.5f %.1f 5 6", g->gps_lat, g->gps_long, g->gps_alt);
+        lat_long_len = sprintf(lat_long, "%.5f %.5f %.1f 5 6", g->gps_long, g->gps_lat, g->gps_alt);
         lat_long[lat_long_len] = '\0';
         printf("%s GPS 1HZ. Sleep 1s.\n", __func__);
         sleep(1);
         printf("%s Execute command: geo fix %s\n", __func__, lat_long);
+        // geo fix <longitude value> <latitude value>
         ret = do_geo_fix(g->sock_client_fd, lat_long);
         if (ret == 0)
         {
@@ -421,6 +433,7 @@ void *injection_gps_data_thread(void *args)
 /********************************************************************************************/
 /********************************************************************************************/
 
+// geo fix <longitude value> <latitude value>
 static int do_geo_fix(int fd, char *args)
 {
     // GEO_SAT2 provides bug backwards compatibility.
