@@ -93,8 +93,8 @@ namespace android
      */
 
     VirtualFakeCamera3::VirtualFakeCamera3(int cameraId, bool facingBack,
-                                             struct hw_module_t *module) : VirtualCamera3(cameraId, module),
-                                                                           mFacingBack(facingBack)
+                                           struct hw_module_t *module) : VirtualCamera3(cameraId, module),
+                                                                         mFacingBack(facingBack)
     {
         ALOGI("Constructing virtual fake camera 3: ID %d, facing %s",
               mCameraID, facingBack ? "back" : "front");
@@ -2770,7 +2770,7 @@ namespace android
     }
 
     void VirtualFakeCamera3::onSensorEvent(uint32_t frameNumber, Event e,
-                                            nsecs_t timestamp)
+                                           nsecs_t timestamp)
     {
         switch (e)
         {

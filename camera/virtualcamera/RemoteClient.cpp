@@ -617,8 +617,8 @@ namespace android
     }
 
     status_t CameraRemoteClient::queryStart(uint32_t pixel_format,
-                                          int width,
-                                          int height)
+                                            int width,
+                                            int height)
     {
         ALOGV("%s", __FUNCTION__);
 
@@ -650,14 +650,14 @@ namespace android
     }
 
     status_t CameraRemoteClient::queryFrame(void *vframe,
-                                          void *pframe,
-                                          size_t vframe_size,
-                                          size_t pframe_size,
-                                          float r_scale,
-                                          float g_scale,
-                                          float b_scale,
-                                          float exposure_comp,
-                                          int64_t *frame_time)
+                                            void *pframe,
+                                            size_t vframe_size,
+                                            size_t pframe_size,
+                                            float r_scale,
+                                            float g_scale,
+                                            float b_scale,
+                                            float exposure_comp,
+                                            int64_t *frame_time)
     {
         ALOGV("%s", __FUNCTION__);
 

@@ -32,8 +32,8 @@ namespace android
 {
 
     VirtualFakeCamera::VirtualFakeCamera(int cameraId,
-                                           bool facingBack,
-                                           struct hw_module_t *module)
+                                         bool facingBack,
+                                         struct hw_module_t *module)
         : VirtualCamera(cameraId, module),
           mFacingBack(facingBack),
           mFakeCameraDevice(nullptr)

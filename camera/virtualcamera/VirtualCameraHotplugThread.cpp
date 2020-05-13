@@ -230,7 +230,7 @@ namespace android
 
                         int halStatus = newStatus ? CAMERA_DEVICE_STATUS_PRESENT : CAMERA_DEVICE_STATUS_NOT_PRESENT;
                         gVirtualCameraFactory.onStatusChanged(cameraId,
-                                                               halStatus);
+                                                              halStatus);
                     }
                 }
                 else

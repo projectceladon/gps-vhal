@@ -40,11 +40,11 @@ namespace android
      *  module - Virtual camera HAL module descriptor.
      */
     VirtualCamera3::VirtualCamera3(int cameraId,
-                                     struct hw_module_t *module) : VirtualBaseCamera(cameraId,
-                                                                                      CAMERA_DEVICE_API_VERSION_3_3,
-                                                                                      &common,
-                                                                                      module),
-                                                                   mStatus(STATUS_ERROR)
+                                   struct hw_module_t *module) : VirtualBaseCamera(cameraId,
+                                                                                   CAMERA_DEVICE_API_VERSION_3_3,
+                                                                                   &common,
+                                                                                   module),
+                                                                 mStatus(STATUS_ERROR)
     {
         common.close = VirtualCamera3::close;
         ops = &sDeviceOps;
@@ -209,14 +209,14 @@ namespace android
     }
 
     int VirtualCamera3::initialize(const struct camera3_device *d,
-                                    const camera3_callback_ops_t *callback_ops)
+                                   const camera3_callback_ops_t *callback_ops)
     {
         VirtualCamera3 *ec = getInstance(d);
         return ec->initializeDevice(callback_ops);
     }
 
     int VirtualCamera3::configure_streams(const struct camera3_device *d,
-                                           camera3_stream_configuration_t *stream_list)
+                                          camera3_stream_configuration_t *stream_list)
     {
         VirtualCamera3 *ec = getInstance(d);
         return ec->configureStreams(stream_list);

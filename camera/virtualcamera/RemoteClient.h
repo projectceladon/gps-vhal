@@ -278,9 +278,9 @@ namespace android
         * Return:
         *  NO_ERROR on success, or an appropriate error status on failure.
         */
-            virtual status_t sendMessage(const void *data, size_t data_size);
+        virtual status_t sendMessage(const void *data, size_t data_size);
 
-            /* Receives data from the service.
+        /* Receives data from the service.
         * This method assumes that data to receive will come in two chunks: 8
         * characters encoding the payload size in hexadecimal string, followed by
         * the paylod (if any).

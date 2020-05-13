@@ -493,8 +493,8 @@ namespace android
     }
 
     status_t VirtualFakeRotatingCameraDevice::startDevice(int width,
-                                                           int height,
-                                                           uint32_t pix_fmt)
+                                                          int height,
+                                                          uint32_t pix_fmt)
     {
         ALOGE("%s width %d height %d", __FUNCTION__, width, height);
 
@@ -553,7 +553,7 @@ namespace android
      ***************************************************************************/
 
     bool VirtualFakeRotatingCameraDevice::produceFrame(void *buffer,
-                                                        int64_t *timestamp)
+                                                       int64_t *timestamp)
     {
         if (mOpenglReady == false)
         {

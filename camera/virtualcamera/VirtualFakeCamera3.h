@@ -47,11 +47,11 @@ namespace android
      * response to hw_module_methods_t::open, and camera_device::close callbacks.
      */
     class VirtualFakeCamera3 : public VirtualCamera3,
-                                private Sensor::SensorListener
+                               private Sensor::SensorListener
     {
     public:
         VirtualFakeCamera3(int cameraId, bool facingBack,
-                            struct hw_module_t *module);
+                           struct hw_module_t *module);
 
         virtual ~VirtualFakeCamera3();
 

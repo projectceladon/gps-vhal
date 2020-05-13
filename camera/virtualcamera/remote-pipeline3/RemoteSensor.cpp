@@ -49,19 +49,19 @@ namespace android
     const uint32_t RemoteSensor::kDefaultSensitivity = 100;
 
     RemoteSensor::RemoteSensor(const char *deviceName, uint32_t width, uint32_t height) : Thread(false),
-                                                                                      mWidth(width),
-                                                                                      mHeight(height),
-                                                                                      mActiveArray{0, 0, width, height},
-                                                                                      mLastRequestWidth(-1),
-                                                                                      mLastRequestHeight(-1),
-                                                                                      mCameraRemoteClient(),
-                                                                                      mDeviceName(deviceName),
-                                                                                      mGotVSync(false),
-                                                                                      mFrameDuration(kFrameDurationRange[0]),
-                                                                                      mNextBuffers(nullptr),
-                                                                                      mFrameNumber(0),
-                                                                                      mCapturedBuffers(nullptr),
-                                                                                      mListener(nullptr)
+                                                                                          mWidth(width),
+                                                                                          mHeight(height),
+                                                                                          mActiveArray{0, 0, width, height},
+                                                                                          mLastRequestWidth(-1),
+                                                                                          mLastRequestHeight(-1),
+                                                                                          mCameraRemoteClient(),
+                                                                                          mDeviceName(deviceName),
+                                                                                          mGotVSync(false),
+                                                                                          mFrameDuration(kFrameDurationRange[0]),
+                                                                                          mNextBuffers(nullptr),
+                                                                                          mFrameNumber(0),
+                                                                                          mCapturedBuffers(nullptr),
+                                                                                          mListener(nullptr)
     {
         ALOGV("RemoteSensor created with pixel array %d x %d", width, height);
     }
@@ -368,7 +368,7 @@ namespace android
             if (listener != nullptr)
             {
                 listener->onRemoteSensorEvent(frameNumber, RemoteSensorListener::EXPOSURE_START,
-                                            mNextCaptureTime);
+                                              mNextCaptureTime);
             }
         }
 
@@ -394,7 +394,7 @@ namespace android
     }
 
     void RemoteSensor::captureRGBA(uint8_t *img, uint32_t width, uint32_t height,
-                                 uint32_t stride, int64_t *timestamp)
+                                   uint32_t stride, int64_t *timestamp)
     {
         status_t res;
         if (width != (uint32_t)mLastRequestWidth ||
@@ -463,8 +463,8 @@ namespace android
         float exposureCompensation = 1.0f;
         // Read from webcam.
         mCameraRemoteClient.queryFrame(nullptr, img, 0, bufferSize, whiteBalance[0],
-                                     whiteBalance[1], whiteBalance[2],
-                                     exposureCompensation, timestamp);
+                                       whiteBalance[1], whiteBalance[2],
+                                       exposureCompensation, timestamp);
 
         ALOGVV("RGBA sensor image captured");
     }
@@ -543,8 +543,8 @@ namespace android
         float exposureCompensation = 1.0f;
         // Read video frame from webcam.
         mCameraRemoteClient.queryFrame(img, nullptr, bufferSize, 0, whiteBalance[0],
-                                     whiteBalance[1], whiteBalance[2],
-                                     exposureCompensation, timestamp);
+                                       whiteBalance[1], whiteBalance[2],
+                                       exposureCompensation, timestamp);
 
         ALOGVV("NV21 sensor image captured");
     }

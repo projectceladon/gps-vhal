@@ -136,8 +136,8 @@ namespace android
     }
 
     void VirtualCameraDevice::initializeWhiteBalanceModes(const char *mode,
-                                                           const float r_scale,
-                                                           const float b_scale)
+                                                          const float r_scale,
+                                                          const float b_scale)
     {
         ALOGV("%s with %s, %f, %f", __FUNCTION__, mode, r_scale, b_scale);
         float *value = new float[3];
@@ -159,8 +159,8 @@ namespace android
     * be stored in place. The adjustment is done in RGB space.
     */
     void VirtualCameraDevice::changeWhiteBalance(uint8_t &y,
-                                                  uint8_t &u,
-                                                  uint8_t &v) const
+                                                 uint8_t &u,
+                                                 uint8_t &v) const
     {
         float r_scale = mWhiteBalanceScale[0];
         float b_scale = mWhiteBalanceScale[2];
@@ -188,8 +188,8 @@ namespace android
     }
 
     status_t VirtualCameraDevice::getCurrentFrameImpl(const uint8_t *source,
-                                                       uint8_t *dest,
-                                                       uint32_t pixelFormat) const
+                                                      uint8_t *dest,
+                                                      uint32_t pixelFormat) const
     {
         if (pixelFormat == mPixelFormat)
         {
@@ -251,8 +251,8 @@ namespace android
     }
 
     status_t VirtualCameraDevice::getCurrentFrame(void *buffer,
-                                                   uint32_t pixelFormat,
-                                                   int64_t *timestamp)
+                                                  uint32_t pixelFormat,
+                                                  int64_t *timestamp)
     {
         if (!isStarted())
         {
@@ -284,7 +284,7 @@ namespace android
     }
 
     status_t VirtualCameraDevice::getCurrentPreviewFrame(void *buffer,
-                                                          int64_t *timestamp)
+                                                         int64_t *timestamp)
     {
         if (!isStarted())
         {
@@ -366,8 +366,8 @@ namespace android
     }
 
     bool VirtualCameraDevice::requestRestart(int width, int height,
-                                              uint32_t pixelFormat,
-                                              bool takingPicture, bool oneBurst)
+                                             uint32_t pixelFormat,
+                                             bool takingPicture, bool oneBurst)
     {
         if (mCameraThread.get() == nullptr)
         {
@@ -385,8 +385,8 @@ namespace android
      ***************************************************************************/
 
     status_t VirtualCameraDevice::commonStartDevice(int width,
-                                                     int height,
-                                                     uint32_t pix_fmt)
+                                                    int height,
+                                                    uint32_t pix_fmt)
     {
         /* Validate pixel format, and calculate framebuffer size at the same time. */
         switch (pix_fmt)
@@ -504,8 +504,8 @@ namespace android
     }
 
     VirtualCameraDevice::CameraThread::CameraThread(VirtualCameraDevice *dev,
-                                                     ProduceFrameFunc producer,
-                                                     void *producerOpaque)
+                                                    ProduceFrameFunc producer,
+                                                    void *producerOpaque)
         : WorkerThread("Camera_CameraThread", dev, dev->mCameraHAL),
           mCurFrameTimestamp(0),
           mProducerFunc(producer),
@@ -667,10 +667,10 @@ namespace android
     }
 
     void VirtualCameraDevice::CameraThread::requestRestart(int width,
-                                                            int height,
-                                                            uint32_t pixelFormat,
-                                                            bool takingPicture,
-                                                            bool oneBurst)
+                                                           int height,
+                                                           uint32_t pixelFormat,
+                                                           bool takingPicture,
+                                                           bool oneBurst)
     {
         Mutex::Autolock lock(mRequestMutex);
         mRestartWidth = width;

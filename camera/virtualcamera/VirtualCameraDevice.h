@@ -385,7 +385,7 @@ namespace android
          * Return:
          *  NO_ERROR on success, or an appropriate error status.
          */
-            virtual status_t commonStartDevice(int width, int height, uint32_t pix_fmt);
+        virtual status_t commonStartDevice(int width, int height, uint32_t pix_fmt);
 
         /* Performs common cleanup on stopDevice.
          * This method will undo what commonStartDevice had done.

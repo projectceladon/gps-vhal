@@ -46,11 +46,11 @@ namespace android
 {
 
     VirtualCameraFactory::VirtualCameraFactory() : mRemoteClient(),
-                                                     mVirtualCameras(nullptr),
-                                                     mVirtualCameraNum(0),
-                                                     mFakeCameraNum(0),
-                                                     mConstructedOK(false),
-                                                     mCallbacks(nullptr)
+                                                   mVirtualCameras(nullptr),
+                                                   mVirtualCameraNum(0),
+                                                   mFakeCameraNum(0),
+                                                   mConstructedOK(false),
+                                                   mCallbacks(nullptr)
     {
 
         /*
@@ -113,7 +113,7 @@ namespace android
                 cameraIdVector.push_back(i);
             }
             mHotplugThread = new VirtualCameraHotplugThread(&cameraIdVector[0],
-                                                             mVirtualCameraNum);
+                                                            mVirtualCameraNum);
             mHotplugThread->run("VirtualCameraHotplugThread");
         }
 
@@ -159,7 +159,15 @@ namespace android
     bool VirtualCameraFactory::createSocketServer()
     {
         ALOGV("%s: Start to create socket server.", __FUNCTION__);
+
+        char buf[PROPERTY_VALUE_MAX] = {
+            '\0',
+        };
         int containerId = 0;
+        if (property_get("ro.boot.container.id", buf, "") > 0)
+        {
+            containerId = atoi(buf);
+        }
         mCSST = new CameraSocketServerThread(containerId, gVirtualCameraFactory);
         mCSST->run("BackVirtualCameraSocketServerThread");
         ALOGV("%s: Finish to create socket server.", __FUNCTION__);
@@ -242,7 +250,9 @@ namespace android
                 ALOGV("%s map curCameraIdis %d. No map.", __FUNCTION__);
                 break;
             }
-        } else {
+        }
+        else
+        {
             ALOGV("%s Remote cmaera is not connected. Do not switch to remote camera. .", __FUNCTION__);
         }
 
@@ -258,7 +268,7 @@ namespace android
      *****************************************************************************/
 
     int VirtualCameraFactory::cameraDeviceOpen(int cameraId,
-                                                hw_device_t **device)
+                                               hw_device_t **device)
     {
         ALOGV("%s: id = %d", __FUNCTION__, cameraId);
 
@@ -284,7 +294,7 @@ namespace android
     }
 
     int VirtualCameraFactory::getCameraInfo(int cameraId,
-                                             struct camera_info *info)
+                                            struct camera_info *info)
     {
         ALOGV("%s: id = %d", __FUNCTION__, cameraId);
 
@@ -354,7 +364,7 @@ namespace android
     }
 
     int VirtualCameraFactory::get_camera_info(int camera_id,
-                                               struct camera_info *info)
+                                              struct camera_info *info)
     {
         return gVirtualCameraFactory.getCameraInfo(camera_id, info);
     }
@@ -371,7 +381,7 @@ namespace android
     }
 
     int VirtualCameraFactory::open_legacy(const struct hw_module_t *module,
-                                           const char *id, uint32_t halVersion, struct hw_device_t **device)
+                                          const char *id, uint32_t halVersion, struct hw_device_t **device)
     {
         // Not supporting legacy open.
         return -ENOSYS;
@@ -393,7 +403,7 @@ namespace android
     static const char *kListDirToken = "dir=";
 
     bool VirtualCameraFactory::getTokenValue(const char *token,
-                                              const std::string &s, char **value)
+                                             const std::string &s, char **value)
     {
         // Find the start of the token.
         size_t tokenStart = s.find(token);
@@ -605,12 +615,12 @@ namespace android
         case 1:
             mVirtualCameras[mVirtualCameraNum] =
                 new VirtualFakeCamera(mVirtualCameraNum, backCamera,
-                                       &HAL_MODULE_INFO_SYM.common);
+                                      &HAL_MODULE_INFO_SYM.common);
             break;
         case 2:
             mVirtualCameras[mVirtualCameraNum] =
                 new VirtualFakeCamera2(mVirtualCameraNum, backCamera,
-                                        &HAL_MODULE_INFO_SYM.common);
+                                       &HAL_MODULE_INFO_SYM.common);
             break;
         case 3:
         {
@@ -620,13 +630,13 @@ namespace android
             {
                 mVirtualCameras[mVirtualCameraNum] =
                     new VirtualFakeCamera(mVirtualCameraNum, backCamera,
-                                           &HAL_MODULE_INFO_SYM.common);
+                                          &HAL_MODULE_INFO_SYM.common);
             }
             else
             {
                 mVirtualCameras[mVirtualCameraNum] =
                     new VirtualFakeCamera3(mVirtualCameraNum, backCamera,
-                                            &HAL_MODULE_INFO_SYM.common);
+                                           &HAL_MODULE_INFO_SYM.common);
             }
         }
         break;

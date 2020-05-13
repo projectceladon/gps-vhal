@@ -108,7 +108,7 @@ namespace android
             };
 
             virtual void onRemoteSensorEvent(uint32_t frameNumber, Event e,
-                                           nsecs_t timestamp) = 0;
+                                             nsecs_t timestamp) = 0;
             virtual ~RemoteSensorListener();
         };
 

@@ -31,8 +31,8 @@ namespace android
 {
 
     VirtualRemoteCamera2::VirtualRemoteCamera2(int cameraId,
-                                             bool facingBack,
-                                             struct hw_module_t *module)
+                                               bool facingBack,
+                                               struct hw_module_t *module)
         : VirtualCamera2(cameraId, module),
           mFacingBack(facingBack)
     {

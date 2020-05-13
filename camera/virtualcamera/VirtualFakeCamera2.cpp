@@ -82,8 +82,8 @@ namespace android
         static_cast<uint64_t>(Sensor::kFrameDurationRange[0])};
 
     VirtualFakeCamera2::VirtualFakeCamera2(int cameraId,
-                                             bool facingBack,
-                                             struct hw_module_t *module)
+                                           bool facingBack,
+                                           struct hw_module_t *module)
         : VirtualCamera2(cameraId, module),
           mFacingBack(facingBack),
           mIsConnected(false)
@@ -669,8 +669,8 @@ namespace android
     }
 
     int VirtualFakeCamera2::triggerAction(uint32_t trigger_id,
-                                           int32_t ext1,
-                                           int32_t ext2)
+                                          int32_t ext1,
+                                          int32_t ext2)
     {
         Mutex::Autolock l(mMutex);
 
@@ -725,9 +725,9 @@ namespace android
     /** Pipeline control worker thread methods */
 
     VirtualFakeCamera2::ConfigureThread::ConfigureThread(VirtualFakeCamera2 *parent) : Thread(false),
-                                                                                         mParent(parent),
-                                                                                         mRequestCount(0),
-                                                                                         mNextBuffers(NULL)
+                                                                                       mParent(parent),
+                                                                                       mRequestCount(0),
+                                                                                       mNextBuffers(NULL)
     {
         mRunning = false;
     }
@@ -1234,12 +1234,12 @@ namespace android
     }
 
     VirtualFakeCamera2::ReadoutThread::ReadoutThread(VirtualFakeCamera2 *parent) : Thread(false),
-                                                                                     mParent(parent),
-                                                                                     mRunning(false),
-                                                                                     mActive(false),
-                                                                                     mRequestCount(0),
-                                                                                     mRequest(NULL),
-                                                                                     mBuffers(NULL)
+                                                                                   mParent(parent),
+                                                                                   mRunning(false),
+                                                                                   mActive(false),
+                                                                                   mRequestCount(0),
+                                                                                   mRequest(NULL),
+                                                                                   mBuffers(NULL)
     {
         mInFlightQueue = new InFlightQueue[kInFlightQueueSize];
         mInFlightHead = 0;
@@ -1727,7 +1727,7 @@ namespace android
     }
 
     VirtualFakeCamera2::ControlThread::ControlThread(VirtualFakeCamera2 *parent) : Thread(false),
-                                                                                     mParent(parent)
+                                                                                   mParent(parent)
     {
         mRunning = false;
     }
@@ -1881,7 +1881,7 @@ namespace android
     }
 
     status_t VirtualFakeCamera2::ControlThread::triggerAction(uint32_t msgType,
-                                                               int32_t ext1, int32_t ext2)
+                                                              int32_t ext1, int32_t ext2)
     {
         ALOGV("%s: Triggering %d (%d, %d)", __FUNCTION__, msgType, ext1, ext2);
         Mutex::Autolock lock(mInputMutex);
@@ -2025,7 +2025,7 @@ namespace android
     }
 
     int VirtualFakeCamera2::ControlThread::processAfTrigger(uint8_t afMode,
-                                                             uint8_t afState)
+                                                            uint8_t afState)
     {
         switch (afMode)
         {
@@ -2105,7 +2105,7 @@ namespace android
     }
 
     int VirtualFakeCamera2::ControlThread::maybeStartAfScan(uint8_t afMode,
-                                                             uint8_t afState)
+                                                            uint8_t afState)
     {
         if ((afMode == ANDROID_CONTROL_AF_MODE_CONTINUOUS_VIDEO ||
              afMode == ANDROID_CONTROL_AF_MODE_CONTINUOUS_PICTURE) &&
@@ -2129,7 +2129,7 @@ namespace android
     }
 
     int VirtualFakeCamera2::ControlThread::updateAfScan(uint8_t afMode,
-                                                         uint8_t afState, nsecs_t *maxSleep)
+                                                        uint8_t afState, nsecs_t *maxSleep)
     {
         if (!(afState == ANDROID_CONTROL_AF_STATE_ACTIVE_SCAN ||
               afState == ANDROID_CONTROL_AF_STATE_PASSIVE_SCAN))
@@ -2185,7 +2185,7 @@ namespace android
     }
 
     void VirtualFakeCamera2::ControlThread::updateAfState(uint8_t newState,
-                                                           int32_t triggerId)
+                                                          int32_t triggerId)
     {
         Mutex::Autolock lock(mInputMutex);
         if (mAfState != newState)
@@ -2199,7 +2199,7 @@ namespace android
     }
 
     int VirtualFakeCamera2::ControlThread::processPrecaptureTrigger(uint8_t aeMode,
-                                                                     uint8_t aeState)
+                                                                    uint8_t aeState)
     {
         switch (aeMode)
         {
@@ -2222,8 +2222,8 @@ namespace android
     }
 
     int VirtualFakeCamera2::ControlThread::maybeStartAeScan(uint8_t aeMode,
-                                                             bool aeLocked,
-                                                             uint8_t aeState)
+                                                            bool aeLocked,
+                                                            uint8_t aeState)
     {
         if (aeLocked)
             return aeState;
@@ -2257,7 +2257,7 @@ namespace android
     }
 
     int VirtualFakeCamera2::ControlThread::updateAeScan(uint8_t aeMode,
-                                                         bool aeLock, uint8_t aeState, nsecs_t *maxSleep)
+                                                        bool aeLock, uint8_t aeState, nsecs_t *maxSleep)
     {
         if (aeLock && aeState != ANDROID_CONTROL_AE_STATE_PRECAPTURE)
         {
@@ -2296,7 +2296,7 @@ namespace android
     }
 
     void VirtualFakeCamera2::ControlThread::updateAeState(uint8_t newState,
-                                                           int32_t triggerId)
+                                                          int32_t triggerId)
     {
         Mutex::Autolock lock(mInputMutex);
         if (mAeState != newState)
@@ -2914,12 +2914,12 @@ namespace android
     }
 
     status_t VirtualFakeCamera2::addOrSize(camera_metadata_t *request,
-                                            bool sizeRequest,
-                                            size_t *entryCount,
-                                            size_t *dataCount,
-                                            uint32_t tag,
-                                            const void *entryData,
-                                            size_t entryDataCount)
+                                           bool sizeRequest,
+                                           size_t *entryCount,
+                                           size_t *dataCount,
+                                           uint32_t tag,
+                                           const void *entryData,
+                                           size_t entryDataCount)
     {
         if (!sizeRequest)
         {

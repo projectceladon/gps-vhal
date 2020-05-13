@@ -33,7 +33,14 @@ namespace android
         mRunning = true;
         mSocketServerFd = -1;
 
-        snprintf(mSocketServerFile, 64, "%s%d", "/ipc/camera-socket", containerId);
+        char container_id_str[64] = {
+            '\0',
+        };
+        snprintf(container_id_str, sizeof(container_id_str), "/ipc/camera-socket%d", containerId);
+        const char *pSocketServerFile = (getenv("K8S_ENV") != NULL && strcmp(getenv("K8S_ENV"), "true") == 0)
+                                       ? "/conn/camera-socket"
+                                       : container_id_str;
+        snprintf(mSocketServerFile, 64, "%s", pSocketServerFile);
         pecf = &ecf;
     }
 

@@ -39,10 +39,10 @@ namespace android
     *  module - Virtual camera HAL module descriptor.
     */
     VirtualCamera2::VirtualCamera2(int cameraId,
-                                     struct hw_module_t *module) : VirtualBaseCamera(cameraId,
-                                                                                      CAMERA_DEVICE_API_VERSION_2_0,
-                                                                                      &common,
-                                                                                      module)
+                                   struct hw_module_t *module) : VirtualBaseCamera(cameraId,
+                                                                                   CAMERA_DEVICE_API_VERSION_2_0,
+                                                                                   &common,
+                                                                                   module)
     {
         common.close = VirtualCamera2::close;
         ops = &sDeviceOps;
@@ -192,7 +192,7 @@ namespace android
     /** 3A triggering */
 
     int VirtualCamera2::triggerAction(uint32_t trigger_id,
-                                       int ext1, int ext2)
+                                      int ext1, int ext2)
     {
         return INVALID_OPERATION;
     }
@@ -240,7 +240,7 @@ namespace android
     }
 
     int VirtualCamera2::set_request_queue_src_ops(const camera2_device_t *d,
-                                                   const camera2_request_queue_src_ops *queue_src_ops)
+                                                  const camera2_request_queue_src_ops *queue_src_ops)
     {
         VirtualCamera2 *ec = getInstance(d);
         ec->mRequestQueueSrc = queue_src_ops;
@@ -254,7 +254,7 @@ namespace android
     }
 
     int VirtualCamera2::set_frame_queue_dst_ops(const camera2_device_t *d,
-                                                 const camera2_frame_queue_dst_ops *queue_dst_ops)
+                                                const camera2_frame_queue_dst_ops *queue_dst_ops)
     {
         VirtualCamera2 *ec = getInstance(d);
         ec->mFrameQueueDst = queue_dst_ops;
@@ -274,22 +274,22 @@ namespace android
     }
 
     int VirtualCamera2::construct_default_request(const camera2_device_t *d,
-                                                   int request_template,
-                                                   camera_metadata_t **request)
+                                                  int request_template,
+                                                  camera_metadata_t **request)
     {
         VirtualCamera2 *ec = getInstance(d);
         return ec->constructDefaultRequest(request_template, request);
     }
 
     int VirtualCamera2::allocate_stream(const camera2_device_t *d,
-                                         uint32_t width,
-                                         uint32_t height,
-                                         int format,
-                                         const camera2_stream_ops_t *stream_ops,
-                                         uint32_t *stream_id,
-                                         uint32_t *format_actual,
-                                         uint32_t *usage,
-                                         uint32_t *max_buffers)
+                                        uint32_t width,
+                                        uint32_t height,
+                                        int format,
+                                        const camera2_stream_ops_t *stream_ops,
+                                        uint32_t *stream_id,
+                                        uint32_t *format_actual,
+                                        uint32_t *usage,
+                                        uint32_t *max_buffers)
     {
         VirtualCamera2 *ec = getInstance(d);
         return ec->allocateStream(width, height, format, stream_ops,
@@ -297,9 +297,9 @@ namespace android
     }
 
     int VirtualCamera2::register_stream_buffers(const camera2_device_t *d,
-                                                 uint32_t stream_id,
-                                                 int num_buffers,
-                                                 buffer_handle_t *buffers)
+                                                uint32_t stream_id,
+                                                int num_buffers,
+                                                buffer_handle_t *buffers)
     {
         VirtualCamera2 *ec = getInstance(d);
         return ec->registerStreamBuffers(stream_id,
@@ -307,20 +307,20 @@ namespace android
                                          buffers);
     }
     int VirtualCamera2::release_stream(const camera2_device_t *d,
-                                        uint32_t stream_id)
+                                       uint32_t stream_id)
     {
         VirtualCamera2 *ec = getInstance(d);
         return ec->releaseStream(stream_id);
     }
 
     int VirtualCamera2::allocate_reprocess_stream(const camera2_device_t *d,
-                                                   uint32_t width,
-                                                   uint32_t height,
-                                                   uint32_t format,
-                                                   const camera2_stream_in_ops_t *reprocess_stream_ops,
-                                                   uint32_t *stream_id,
-                                                   uint32_t *consumer_usage,
-                                                   uint32_t *max_buffers)
+                                                  uint32_t width,
+                                                  uint32_t height,
+                                                  uint32_t format,
+                                                  const camera2_stream_in_ops_t *reprocess_stream_ops,
+                                                  uint32_t *stream_id,
+                                                  uint32_t *consumer_usage,
+                                                  uint32_t *max_buffers)
     {
         VirtualCamera2 *ec = getInstance(d);
         return ec->allocateReprocessStream(width, height, format,
@@ -339,23 +339,23 @@ namespace android
     }
 
     int VirtualCamera2::release_reprocess_stream(const camera2_device_t *d,
-                                                  uint32_t stream_id)
+                                                 uint32_t stream_id)
     {
         VirtualCamera2 *ec = getInstance(d);
         return ec->releaseReprocessStream(stream_id);
     }
 
     int VirtualCamera2::trigger_action(const camera2_device_t *d,
-                                        uint32_t trigger_id,
-                                        int ext1,
-                                        int ext2)
+                                       uint32_t trigger_id,
+                                       int ext1,
+                                       int ext2)
     {
         VirtualCamera2 *ec = getInstance(d);
         return ec->triggerAction(trigger_id, ext1, ext2);
     }
 
     int VirtualCamera2::set_notify_callback(const camera2_device_t *d,
-                                             camera2_notify_callback notify_cb, void *user)
+                                            camera2_notify_callback notify_cb, void *user)
     {
         VirtualCamera2 *ec = getInstance(d);
         Mutex::Autolock l(ec->mMutex);
@@ -365,7 +365,7 @@ namespace android
     }
 
     int VirtualCamera2::get_metadata_vendor_tag_ops(const camera2_device_t *d,
-                                                     vendor_tag_query_ops_t **ops)
+                                                    vendor_tag_query_ops_t **ops)
     {
         VirtualCamera2 *ec = getInstance(d);
         *ops = static_cast<vendor_tag_query_ops_t *>(
@@ -417,7 +417,7 @@ namespace android
     }
 
     void VirtualCamera2::sendNotification(int32_t msgType,
-                                           int32_t ext1, int32_t ext2, int32_t ext3)
+                                          int32_t ext1, int32_t ext2, int32_t ext3)
     {
         camera2_notify_callback notifyCb;
         {

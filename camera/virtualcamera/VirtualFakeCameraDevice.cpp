@@ -125,8 +125,8 @@ namespace android
     }
 
     status_t VirtualFakeCameraDevice::startDevice(int width,
-                                                   int height,
-                                                   uint32_t pix_fmt)
+                                                  int height,
+                                                  uint32_t pix_fmt)
     {
         ALOGV("%s", __FUNCTION__);
 
@@ -374,10 +374,10 @@ namespace android
     }
 
     void VirtualFakeCameraDevice::drawSquare(void *buffer,
-                                              int x,
-                                              int y,
-                                              int size,
-                                              const YUVPixel *color)
+                                             int x,
+                                             int y,
+                                             int size,
+                                             const YUVPixel *color)
     {
         uint8_t *currentFrame = reinterpret_cast<uint8_t *>(buffer);
         uint8_t *frameU = currentFrame + mFrameUOffset;

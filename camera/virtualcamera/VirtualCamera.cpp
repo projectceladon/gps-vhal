@@ -110,11 +110,11 @@ namespace android
     }
 
     VirtualCamera::VirtualCamera(int cameraId,
-                                   struct hw_module_t *module)
+                                 struct hw_module_t *module)
         : VirtualBaseCamera(cameraId,
-                             HARDWARE_DEVICE_API_VERSION(1, 0),
-                             &common,
-                             module),
+                            HARDWARE_DEVICE_API_VERSION(1, 0),
+                            &common,
+                            module),
           mPreviewWindow(),
           mCallbackNotifier()
     {
@@ -245,7 +245,7 @@ namespace android
     }
 
     void VirtualCamera::onNextFrameAvailable(nsecs_t timestamp,
-                                              VirtualCameraDevice *camera_dev)
+                                             VirtualCameraDevice *camera_dev)
     {
         /* Notify the preview window first. */
         mPreviewWindow.onNextFrameAvailable(timestamp, camera_dev);
@@ -345,10 +345,10 @@ namespace android
     }
 
     void VirtualCamera::setCallbacks(camera_notify_callback notify_cb,
-                                      camera_data_callback data_cb,
-                                      camera_data_timestamp_callback data_cb_timestamp,
-                                      camera_request_memory get_memory,
-                                      void *user)
+                                     camera_data_callback data_cb,
+                                     camera_data_timestamp_callback data_cb_timestamp,
+                                     camera_request_memory get_memory,
+                                     void *user)
     {
         mCallbackNotifier.setCallbacks(notify_cb, data_cb, data_cb_timestamp,
                                        get_memory, user);
@@ -852,7 +852,7 @@ namespace android
     }
 
     status_t VirtualCamera::getConfiguredFrameSize(int *outWidth,
-                                                    int *outHeight) const
+                                                   int *outHeight) const
     {
         int width = -1, height = -1;
         if (mParameters.get(CameraParameters::KEY_VIDEO_SIZE) != nullptr)
@@ -1021,7 +1021,7 @@ namespace android
      ***************************************************************************/
 
     int VirtualCamera::set_preview_window(struct camera_device *dev,
-                                           struct preview_stream_ops *window)
+                                          struct preview_stream_ops *window)
     {
         VirtualCamera *ec = reinterpret_cast<VirtualCamera *>(dev->priv);
         if (ec == NULL)
@@ -1116,7 +1116,7 @@ namespace android
     }
 
     int VirtualCamera::store_meta_data_in_buffers(struct camera_device *dev,
-                                                   int enable)
+                                                  int enable)
     {
         VirtualCamera *ec = reinterpret_cast<VirtualCamera *>(dev->priv);
         if (ec == NULL)
@@ -1161,7 +1161,7 @@ namespace android
     }
 
     void VirtualCamera::release_recording_frame(struct camera_device *dev,
-                                                 const void *opaque)
+                                                const void *opaque)
     {
         VirtualCamera *ec = reinterpret_cast<VirtualCamera *>(dev->priv);
         if (ec == NULL)
@@ -1250,9 +1250,9 @@ namespace android
     }
 
     int VirtualCamera::send_command(struct camera_device *dev,
-                                     int32_t cmd,
-                                     int32_t arg1,
-                                     int32_t arg2)
+                                    int32_t cmd,
+                                    int32_t arg1,
+                                    int32_t arg2)
     {
         VirtualCamera *ec = reinterpret_cast<VirtualCamera *>(dev->priv);
         if (ec == NULL)

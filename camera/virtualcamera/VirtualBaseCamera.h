@@ -37,9 +37,9 @@ namespace android
     {
     public:
         VirtualBaseCamera(int cameraId,
-                           uint32_t cameraVersion,
-                           struct hw_device_t *device,
-                           struct hw_module_t *module);
+                          uint32_t cameraVersion,
+                          struct hw_device_t *device,
+                          struct hw_module_t *module);
 
         virtual ~VirtualBaseCamera();
 

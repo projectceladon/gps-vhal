@@ -51,7 +51,7 @@ namespace android
         *  module - Virtual camera HAL module descriptor.
         */
         VirtualCamera3(int cameraId,
-                        struct hw_module_t *module);
+                       struct hw_module_t *module);
 
         /* Destructs VirtualCamera2 instance. */
         virtual ~VirtualCamera3();

@@ -49,8 +49,8 @@ namespace android
      ***************************************************************************/
 
     status_t VirtualRemoteCamera::Initialize(const char *device_name,
-                                            const char *frame_dims,
-                                            const char *facing_dir)
+                                             const char *frame_dims,
+                                             const char *facing_dir)
     {
         ALOGV("%s:\n   Name=%s\n   Facing '%s'\n   Dimensions=%s",
               __FUNCTION__, device_name, facing_dir, frame_dims);
