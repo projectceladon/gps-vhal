@@ -1,19 +1,38 @@
 #include <stdio.h>
+#include <iostream>
 #include "DirectInput.h"
 #include <string>
 
 using namespace std;
-
-int main()
+void test_button_1(DirectInputReceiver *device)
 {
-	DirectInputReceiver *device = new DirectInputReceiver(0);
+	printf("\n\n\n\t%s:%d BUTTON_1\n", __func__, __LINE__);
+	device->onJoystickMessage("k 288 1\n"); // BUTTON_1 Down
+	device->onJoystickMessage("c\n");
+	usleep(1 * 1000 * 1000);
+	device->onJoystickMessage("k 288 0\n"); // BUTTON_1 Up
+	device->onJoystickMessage("c\n");
+}
 
+void test_button_mode(DirectInputReceiver *device)
+{
+	printf("\n\n\n\t%s:%d BUTTON_MODE\n", __func__, __LINE__);
+	device->onJoystickMessage("k 316 1\n"); // BUTTON_MODE Down
+	device->onJoystickMessage("c\n");
+	usleep(1 * 1000 * 1000);
+	device->onJoystickMessage("k 316 0\n"); // BUTTON_MODE Up
+	device->onJoystickMessage("c\n");
+}
+
+void test_joystick(DirectInputReceiver *device)
+{
 	printf("\n\n\n\t%s:%d BTN_TL\n", __func__, __LINE__);
 	device->onJoystickMessage("k 310 1\n"); // BTN_TL Down
 	device->onJoystickMessage("c\n");
 	usleep(1 * 1000 * 1000);
 	device->onJoystickMessage("k 310 0\n"); // BTN_TL Up
 	device->onJoystickMessage("c\n");
+
 	usleep(1 * 1000 * 1000);
 
 	printf("\n\n\n\t%s:%d BTN_TR\n", __func__, __LINE__);
@@ -27,7 +46,43 @@ int main()
 	printf("\n\n\n\t%s:%d BTN_TL2\n", __func__, __LINE__);
 	device->onJoystickMessage("k 312 1\n"); // BTN_TL2 Down
 	device->onJoystickMessage("c\n");
+	usleep(40000);
+	device->onJoystickMessage("a 62 0\n");
+	device->onJoystickMessage("c\n");
+	usleep(40000);
+	device->onJoystickMessage("a 62 50\n");
+	device->onJoystickMessage("c\n");
+	usleep(40000);
+	device->onJoystickMessage("a 62 100\n");
+	device->onJoystickMessage("c\n");
+	usleep(40000);
+	device->onJoystickMessage("a 62 150\n");
+	device->onJoystickMessage("c\n");
+	usleep(40000);
+	device->onJoystickMessage("a 62 200\n");
+	device->onJoystickMessage("c\n");
+	usleep(40000);
+	device->onJoystickMessage("a 62 255\n");
+	device->onJoystickMessage("c\n");
+
 	usleep(1 * 1000 * 1000);
+
+	device->onJoystickMessage("a 62 200\n");
+	device->onJoystickMessage("c\n");
+	usleep(40000);
+
+	device->onJoystickMessage("a 62 150\n");
+	device->onJoystickMessage("c\n");
+	usleep(40000);
+	device->onJoystickMessage("a 62 100\n");
+	device->onJoystickMessage("c\n");
+	usleep(40000);
+	device->onJoystickMessage("a 62 50\n");
+	device->onJoystickMessage("c\n");
+	usleep(40000);
+	device->onJoystickMessage("a 62 0\n");
+	device->onJoystickMessage("c\n");
+	usleep(40000);
 	device->onJoystickMessage("k 312 0\n"); // BTN_TL2 Up
 	device->onJoystickMessage("c\n");
 	usleep(1 * 1000 * 1000);
@@ -35,9 +90,46 @@ int main()
 	printf("\n\n\n\t%s:%d BTN_TR2\n", __func__, __LINE__);
 	device->onJoystickMessage("k 313 1\n"); // BTN_TR2 Down
 	device->onJoystickMessage("c\n");
+	usleep(40000);
+	device->onJoystickMessage("a 63 0\n");
+	device->onJoystickMessage("c\n");
+	usleep(40000);
+	device->onJoystickMessage("a 63 50\n");
+	device->onJoystickMessage("c\n");
+	usleep(40000);
+	device->onJoystickMessage("a 63 100\n");
+	device->onJoystickMessage("c\n");
+	usleep(40000);
+	device->onJoystickMessage("a 63 150\n");
+	device->onJoystickMessage("c\n");
+	usleep(40000);
+	device->onJoystickMessage("a 63 200\n");
+	device->onJoystickMessage("c\n");
+	usleep(40000);
+	device->onJoystickMessage("a 63 255\n");
+	device->onJoystickMessage("c\n");
+
 	usleep(1 * 1000 * 1000);
+
+	device->onJoystickMessage("a 63 200\n");
+	device->onJoystickMessage("c\n");
+	usleep(40000);
+
+	device->onJoystickMessage("a 63 150\n");
+	device->onJoystickMessage("c\n");
+	usleep(40000);
+	device->onJoystickMessage("a 63 100\n");
+	device->onJoystickMessage("c\n");
+	usleep(40000);
+	device->onJoystickMessage("a 63 50\n");
+	device->onJoystickMessage("c\n");
+	usleep(40000);
+	device->onJoystickMessage("a 63 0\n");
+	device->onJoystickMessage("c\n");
+	usleep(40000);
 	device->onJoystickMessage("k 313 0\n"); // BTN_TR2 Up
 	device->onJoystickMessage("c\n");
+
 	usleep(1 * 1000 * 1000);
 
 	printf("\n\n\n\t%s:%d BTN_SELECT\n", __func__, __LINE__);
@@ -74,44 +166,36 @@ int main()
 
 	// BTN_Y
 	printf("\n\n\n\t%s:%d BTN_Y\n", __func__, __LINE__);
-	device->onJoystickMessage("m 4 0\n");
 	device->onJoystickMessage("k 308 1\n");
 	device->onJoystickMessage("c\n");
 	usleep(1 * 1000 * 1000);
-	device->onJoystickMessage("m 4 0\n");
 	device->onJoystickMessage("k 308 0\n");
 	device->onJoystickMessage("c\n");
 	usleep(1 * 1000 * 1000);
 
 	// BTN_X
 	printf("\n\n\n\t%s:%d BTN_X\n", __func__, __LINE__);
-	device->onJoystickMessage("m 4 0\n");
 	device->onJoystickMessage("k 307 1\n");
 	device->onJoystickMessage("c\n");
 	usleep(1 * 1000 * 1000);
-	device->onJoystickMessage("m 4 0\n");
 	device->onJoystickMessage("k 307 0\n");
 	device->onJoystickMessage("c\n");
 	usleep(1 * 1000 * 1000);
 
 	// BTN_A
 	printf("\n\n\n\t%s:%d BTN_A\n", __func__, __LINE__);
-	device->onJoystickMessage("m 4 0\n");
 	device->onJoystickMessage("k 304 1\n");
 	device->onJoystickMessage("c\n");
 	usleep(1 * 1000 * 1000);
-	device->onJoystickMessage("m 4 0\n");
 	device->onJoystickMessage("k 304 0\n");
 	device->onJoystickMessage("c\n");
 	usleep(1 * 1000 * 1000);
 
 	// BTN_B
 	printf("\n\n\n\t%s:%d BTN_B\n", __func__, __LINE__);
-	device->onJoystickMessage("m 4 0\n");
 	device->onJoystickMessage("k 305 1\n");
 	device->onJoystickMessage("c\n");
 	usleep(1 * 1000 * 1000);
-	device->onJoystickMessage("m 4 0\n");
 	device->onJoystickMessage("k 305 0\n");
 	device->onJoystickMessage("c\n");
 	usleep(1 * 1000 * 1000);
@@ -391,7 +475,10 @@ int main()
 	device->onJoystickMessage("a 1 0\n");
 	device->onJoystickMessage("c\n");
 	usleep(1 * 1000 * 1000);
+}
 
+void test_touch(DirectInputReceiver *device)
+{
 	// Touch Event
 	printf("\n\n\n\t%s:%d Touch Event\n", __func__, __LINE__);
 	device->onInputMessage("d 0 710 500 200\n");
@@ -432,6 +519,43 @@ int main()
 
 	device->onInputMessage("u 0\n");
 	device->onInputMessage("c\n");
+}
 
+int main()
+{
+	DirectInputReceiver *device = new DirectInputReceiver(0);
+	int select = 0;
+	printf("\t%s:%d Remote input test:\n", __func__, __LINE__);
+
+	do
+	{
+		printf("\n\n\n\t%s:%d \n"
+			   "\t      1: Test BUTTON_1. \n"
+			   "\t      2: Test BUTTON_MODE. \n"
+			   "\t      3. Test Joystick. \n"
+			   "\t      4. Test touchscreen. \n"
+			   "\t      Other number. Quit. \n"
+			   "\t      Please select:",
+			   __func__, __LINE__);
+		cin >> select;
+		switch (select)
+		{
+		case 1:
+			test_button_1(device);
+			break;
+		case 2:
+			test_button_mode(device);
+			break;
+		case 3:
+			test_joystick(device);
+			break;
+		case 4:
+			test_touch(device);
+			break;
+		default:
+			printf("\t%s:%d Quit\n", __func__, __LINE__);
+			break;
+		}
+	} while (select >= 1 && select <= 4);
 	return 0;
 }
