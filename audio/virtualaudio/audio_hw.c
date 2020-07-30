@@ -138,10 +138,13 @@ struct audio_server_socket
     //INET socket
     int in_tcp_port;
     int iss_epoll_fd;
+    int in_buffer_size_ms; // input buffer size in milliseconds
     struct epoll_event iss_epoll_event[1];
 };
 
 static struct audio_server_socket ass;
+
+static const char *prop_key_in_buffer_size = "virtual.audio.in.buffer_size_ms";
 
 /* Uncomment this, if you want to dump Remote audio record */
 //#define PCM_RECORD_DUMP
@@ -1680,7 +1683,7 @@ static size_t adev_get_input_buffer_size(const struct audio_hw_device *dev,
                                          const struct audio_config *config)
 {
     size_t channel_count = audio_channel_count_from_in_mask(config->channel_mask);
-    size_t buffer_size = samples_per_milliseconds(STUB_INPUT_BUFFER_MILLISECONDS,
+    size_t buffer_size = samples_per_milliseconds(ass.in_buffer_size_ms,
                                                   config->sample_rate,
                                                   channel_count);
 
@@ -1696,6 +1699,31 @@ static size_t adev_get_input_buffer_size(const struct audio_hw_device *dev,
     }
     ALOGV("%s: %zu", __func__, buffer_size);
     return buffer_size;
+}
+
+// Read input buffer size from property if set, use default otherwise.
+static int get_input_buffer_size_ms()
+{
+    char buf[PROPERTY_VALUE_MAX] = "";
+    int ret = property_get(prop_key_in_buffer_size, buf, "");
+    int in_buffer_size_ms = -1;
+
+    /* Handle invalid buffer size set in property */
+    if (ret < 0 || (in_buffer_size_ms = atoi(buf)) < 10)
+    {
+        if (in_buffer_size_ms < 10)
+        {
+            in_buffer_size_ms = STUB_INPUT_BUFFER_MILLISECONDS;
+            ALOGW("%s: Invalid Audio input buffer size! Must be >= 10ms.\n"
+                  "Setting default input buffer size: %d ms",
+                  __func__, in_buffer_size_ms);
+        }
+    }
+    else /* Valid buffer size set via property */
+    {
+        ALOGI("%s: Setting input buffer size: %d ms", __func__, in_buffer_size_ms);
+    }
+    return in_buffer_size_ms;
 }
 
 static int adev_open_input_stream(struct audio_hw_device *dev,
@@ -1734,6 +1762,9 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
     ALOGI("%s: Config requested by Android Fwk sample_rate: %u, channels: %x, format: %d",
           __func__, config->sample_rate, config->channel_mask, config->format);
 
+    // Read input buffer size from property if set, use default otherwise.
+    ass.in_buffer_size_ms = get_input_buffer_size_ms();
+
     in->sample_rate = config->sample_rate;
     if (in->sample_rate == 0)
         in->sample_rate = STUB_DEFAULT_SAMPLE_RATE;
@@ -1744,7 +1775,7 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
     if (in->format == AUDIO_FORMAT_DEFAULT)
         in->format = STUB_DEFAULT_AUDIO_FORMAT;
 
-    in->frame_count = samples_per_milliseconds(STUB_INPUT_BUFFER_MILLISECONDS, in->sample_rate, 1);
+    in->frame_count = samples_per_milliseconds(ass.in_buffer_size_ms, in->sample_rate, 1);
 
     ALOGI("%s: Config offered by HAL: sample_rate: %u, channels: %x, format: %d,",
           __func__, in->sample_rate, in->channel_mask, in->format);
