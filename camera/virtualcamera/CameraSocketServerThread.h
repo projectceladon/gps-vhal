@@ -17,40 +17,39 @@
 #ifndef CAMERA_SOCKET_SERVER_H
 #define CAMERA_SOCKET_SERVER_H
 
-#include <utils/String8.h>
-#include <utils/Vector.h>
-#include <utils/Thread.h>
-#include <utils/Mutex.h>
 #include <sys/socket.h>
-#include <sys/un.h>
 #include <sys/stat.h>
+#include <sys/un.h>
+#include <utils/Mutex.h>
+#include <utils/String8.h>
+#include <utils/Thread.h>
+#include <utils/Vector.h>
 #include <string>
 
-namespace android
-{
+namespace android {
 
-    class VirtualCameraFactory;
-    class CameraSocketServerThread : public Thread
-    {
-    public:
-        CameraSocketServerThread(int containerId, VirtualCameraFactory &ecf);
-        ~CameraSocketServerThread();
+class VirtualCameraFactory;
+class CameraSocketServerThread : public Thread {
+ public:
+  CameraSocketServerThread(int containerId, VirtualCameraFactory &ecf);
+  ~CameraSocketServerThread();
 
-        virtual void requestExit();
-        virtual status_t requestExitAndWait();
-        int getClientFd();
+  virtual void requestExit();
+  virtual status_t requestExitAndWait();
+  int getClientFd();
 
-    private:
-        virtual status_t readyToRun();
-        virtual bool threadLoop();
+ private:
+  virtual status_t readyToRun();
+  virtual bool threadLoop();
 
-        Mutex mMutex;
-        bool mRunning; // guarding only when it's important
-        int mSocketServerFd = -1;
-        char mSocketServerFile[64];
-        int mClientFd = -1;
-        android::VirtualCameraFactory *pecf = nullptr;
-    };
-} // namespace android
+  Mutex mMutex;
+  bool mRunning;  // guarding only when it's important
+  int mSocketServerFd = -1;
+  char mSocketServerFile[64];
+  int mClientFd = -1;
+  bool mSocktypeIP = false;
+  android::VirtualCameraFactory *pecf = nullptr;
+};
+}  // namespace android
 
 #endif
