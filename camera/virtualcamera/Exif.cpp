@@ -478,7 +478,7 @@ namespace android
         if (entry.count > 0)
         {
             stringValue = (const char *)entry.data.u8;
-            ALOGV("ANDROID_JPEG_GPS_PROCESSING_METHOD(len=%d) %s", entry.count, stringValue);
+            //ALOGV("ANDROID_JPEG_GPS_PROCESSING_METHOD(len=%d) %s", entry.count, stringValue);
             std::vector<unsigned char> data;
             // Because this is a tag with an undefined format it has to be prefixed
             // with the encoding type. Insert an ASCII prefix first, then the

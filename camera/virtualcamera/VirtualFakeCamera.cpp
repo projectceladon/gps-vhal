@@ -19,7 +19,7 @@
  * functionality of a fake camera.
  */
 
-// #define LOG_NDEBUG 0
+ #define LOG_NDEBUG 1
 #define LOG_TAG "VirtualCamera_FakeCamera"
 #include <log/log.h>
 #include <cutils/properties.h>
@@ -59,9 +59,11 @@ namespace android
      * Public API overrides
      ***************************************************************************/
 
-    status_t VirtualFakeCamera::Initialize()
+    status_t VirtualFakeCamera::Initialize(const char *device_name,
+                            const char *frame_dims,
+                            const char *facing_dir)
     {
-        status_t res = mFakeCameraDevice->Initialize();
+        status_t res = mFakeCameraDevice->Initialize(device_name);
         if (res != NO_ERROR)
         {
             return res;
@@ -70,14 +72,14 @@ namespace android
         const char *facing = mFacingBack ? VirtualCamera::FACING_BACK : VirtualCamera::FACING_FRONT;
 
         mParameters.set(VirtualCamera::FACING_KEY, facing);
-        ALOGD("%s: Fake camera is facing %s", __FUNCTION__, facing);
+        ALOGE("%s: Fake camera is facing %s", __FUNCTION__, facing);
 
         mParameters.set(VirtualCamera::ORIENTATION_KEY,
                         gVirtualCameraFactory.getFakeCameraOrientation());
         mParameters.set(CameraParameters::KEY_ROTATION,
                         gVirtualCameraFactory.getFakeCameraOrientation());
 
-        res = VirtualCamera::Initialize();
+        res = VirtualCamera::Initialize(device_name, frame_dims, facing_dir);
         if (res != NO_ERROR)
         {
             return res;
@@ -90,11 +92,11 @@ namespace android
         /* 352x288, 320x240 and 176x144 frame dimensions are required by
         * the framework for video mode preview and video recording. */
         mParameters.set(CameraParameters::KEY_SUPPORTED_PICTURE_SIZES,
-                        "1920x1080,1280x720,640x480,352x288,320x240");
+                        "640x480,352x288,320x240");
         mParameters.set(CameraParameters::KEY_SUPPORTED_PREVIEW_SIZES,
-                        "1920x1080,1280x720,640x480,352x288,320x240,176x144");
+                        "640x480,352x288,320x240,176x144");
         mParameters.set(CameraParameters::KEY_SUPPORTED_VIDEO_SIZES,
-                        "1920x1080,1280x720,640x480,352x288,320x240,176x144");
+                        "640x480,352x288,320x240,176x144");
         mParameters.set(CameraParameters::KEY_PREFERRED_PREVIEW_SIZE_FOR_VIDEO,
                         "1920x1080");
 

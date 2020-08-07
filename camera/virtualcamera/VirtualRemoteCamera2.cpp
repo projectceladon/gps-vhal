@@ -20,7 +20,7 @@
  * capabilities of a v2 camera device.
  */
 
-// #define LOG_NDEBUG 0
+#define LOG_NDEBUG 0
 #define LOG_TAG "VirtualCamera_RemoteCamera2"
 #include <log/log.h>
 #include <cutils/properties.h>
@@ -48,7 +48,9 @@ namespace android
      * Public API overrides
      ***************************************************************************/
 
-    status_t VirtualRemoteCamera2::Initialize()
+    status_t VirtualRemoteCamera2::Initialize(const char *device_name,
+                            const char *frame_dims,
+                            const char *facing_dir)
     {
         return NO_ERROR;
     }

@@ -77,7 +77,9 @@ namespace android
 
   public:
     /** Override of base class method */
-    virtual status_t Initialize();
+    virtual status_t Initialize(const char *device_name,
+                            const char *frame_dims,
+                            const char *facing_dir);
 
     /* Next frame is available in the camera device.
          * This is a notification callback that is invoked by the camera device when

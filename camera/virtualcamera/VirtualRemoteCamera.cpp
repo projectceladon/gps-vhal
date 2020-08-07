@@ -19,7 +19,7 @@
  * functionality of an virtual camera connected to the host.
  */
 
-// #define LOG_NDEBUG 0
+#define LOG_NDEBUG 0
 #define LOG_TAG "VirtualCamera_RemoteCamera"
 #include <log/log.h>
 #include "VirtualRemoteCamera.h"
@@ -65,7 +65,7 @@ namespace android
         }
 
         /* Initialize base class. */
-        res = VirtualCamera::Initialize();
+        res = VirtualCamera::Initialize(device_name, frame_dims, facing_dir);
         if (res != NO_ERROR)
         {
             return res;

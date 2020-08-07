@@ -19,7 +19,7 @@
  * services in the emulator via remote pipe.
  */
 
-// #define LOG_NDEBUG 0
+//#define LOG_NDEBUG 0
 #define LOG_TAG "VirtualCamera_RemoteClient"
 #include <log/log.h>
 #include "VirtualCamera.h"

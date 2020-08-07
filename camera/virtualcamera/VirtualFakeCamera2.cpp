@@ -21,7 +21,7 @@
 
 #include <inttypes.h>
 
-// #define LOG_NDEBUG 0
+ #define LOG_NDEBUG 1
 #define LOG_TAG "VirtualCamera_FakeCamera2"
 #include <log/log.h>
 
@@ -88,7 +88,7 @@ namespace android
           mFacingBack(facingBack),
           mIsConnected(false)
     {
-        ALOGD("Constructing virtual fake camera 2 facing %s",
+        ALOGE("Constructing virtual fake camera 2 facing %s",
               facingBack ? "back" : "front");
     }
 
@@ -104,7 +104,9 @@ namespace android
      * Public API overrides
      ***************************************************************************/
 
-    status_t VirtualFakeCamera2::Initialize()
+    status_t VirtualFakeCamera2::Initialize(const char *device_name,
+                            const char *frame_dims,
+                            const char *facing_dir)
     {
         status_t res;
 
@@ -163,7 +165,7 @@ namespace android
     status_t VirtualFakeCamera2::connectCamera(hw_device_t **device)
     {
         status_t res;
-        ALOGV("%s", __FUNCTION__);
+        ALOGE("%s", __FUNCTION__);
 
         {
             Mutex::Autolock l(mMutex);

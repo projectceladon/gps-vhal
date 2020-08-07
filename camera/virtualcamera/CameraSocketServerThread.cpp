@@ -13,171 +13,225 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-// #define LOG_NDEBUG 0
+//#define LOG_NDEBUG 0
 #define LOG_TAG "CameraSocketServerThread"
 #include <log/log.h>
 
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/inotify.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "CameraSocketServerThread.h"
+#include "VirtualBuffer.h"
 #include "VirtualCameraFactory.h"
+#include <errno.h>
+#include <poll.h>
+#include <stdlib.h>
+#include <time.h>
+#define DUMP_FROM_LAPTOP_TO_SERVER(filename, p_addr1, len1, p_addr2, len2)     \
+	({                                                                     \
+		size_t rc = 0;                                                 \
+		FILE *fp = fopen("/ipc/filename.yuv", "w+");                   \
+		if (fp) {                                                      \
+			rc = fwrite(p_addr1, 1, len1, fp);                     \
+			rc = fwrite(p_addr2, 1, len2, fp);                     \
+			fclose(fp);                                            \
+		} else {                                                       \
+			ALOGE("open failed!!!");                               \
+		}                                                              \
+	})
+android::ClientVideoBuffer *android::ClientVideoBuffer::ic_instance = 0;
 
 namespace android
 {
 
-    CameraSocketServerThread::CameraSocketServerThread(int containerId, VirtualCameraFactory &ecf) : Thread(/*canCallJava*/ false)
-    {
-        mRunning = true;
-        mSocketServerFd = -1;
+CameraSocketServerThread::CameraSocketServerThread(int containerId,
+						   VirtualCameraFactory &ecf)
+    : Thread(/*canCallJava*/ false)
+{
+	mRunning = true;
+	mSocketServerFd = -1;
 
-        char container_id_str[64] = {
-            '\0',
-        };
-        snprintf(container_id_str, sizeof(container_id_str), "/ipc/camera-socket%d", containerId);
-        const char *pSocketServerFile = (getenv("K8S_ENV") != NULL && strcmp(getenv("K8S_ENV"), "true") == 0)
-                                       ? "/conn/camera-socket"
-                                       : container_id_str;
-        snprintf(mSocketServerFile, 64, "%s", pSocketServerFile);
-        pecf = &ecf;
-    }
+	char container_id_str[64] = {
+	    '\0',
+	};
+	snprintf(container_id_str, sizeof(container_id_str),
+		 "/ipc/camera-socket%d", containerId);
+	const char *pSocketServerFile = (getenv("K8S_ENV") != NULL &&
+					 strcmp(getenv("K8S_ENV"), "true") == 0)
+					    ? "/conn/camera-socket"
+					    : container_id_str;
+	snprintf(mSocketServerFile, 64, "%s", pSocketServerFile);
+	pecf = &ecf;
+}
 
-    CameraSocketServerThread::~CameraSocketServerThread()
-    {
-        if (mClientFd > 0)
-        {
-            close(mClientFd);
-            mClientFd = -1;
-        }
-        if (mSocketServerFd > 0)
-        {
-            close(mSocketServerFd);
-            mSocketServerFd = -1;
-        }
-    }
+CameraSocketServerThread::~CameraSocketServerThread()
+{
+	if (mClientFd > 0) {
+		close(mClientFd);
+		mClientFd = -1;
+	}
+	if (mSocketServerFd > 0) {
+		close(mSocketServerFd);
+		mSocketServerFd = -1;
+	}
+}
 
-    status_t CameraSocketServerThread::requestExitAndWait()
-    {
-        ALOGE("%s: Not implemented. Use requestExit + join instead",
-              __FUNCTION__);
-        return INVALID_OPERATION;
-    }
-    int CameraSocketServerThread::getClientFd()
-    {
-        Mutex::Autolock al(mMutex);
-        return mClientFd;
-    }
+status_t CameraSocketServerThread::requestExitAndWait()
+{
+	ALOGE("%s: Not implemented. Use requestExit + join instead",
+	      __FUNCTION__);
+	return INVALID_OPERATION;
+}
+int CameraSocketServerThread::getClientFd()
+{
+	Mutex::Autolock al(mMutex);
+	return mClientFd;
+}
 
-    void CameraSocketServerThread::requestExit()
-    {
-        Mutex::Autolock al(mMutex);
+void CameraSocketServerThread::requestExit()
+{
+	Mutex::Autolock al(mMutex);
 
-        ALOGV("%s: Requesting thread exit", __FUNCTION__);
-        mRunning = false;
-        ALOGV("%s: Request exit complete.", __FUNCTION__);
-    }
+	ALOGV("%s: Requesting thread exit", __FUNCTION__);
+	mRunning = false;
+	ALOGV("%s: Request exit complete.", __FUNCTION__);
+}
 
-    status_t CameraSocketServerThread::readyToRun()
-    {
-        Mutex::Autolock al(mMutex);
+status_t CameraSocketServerThread::readyToRun()
+{
+	Mutex::Autolock al(mMutex);
 
-        return OK;
-    }
+	return OK;
+}
 
-    bool CameraSocketServerThread::threadLoop()
-    {
-        int ret = 0;
-        int newClientFd = -1;
+bool CameraSocketServerThread::threadLoop()
+{
+	int ret = 0;
+	int newClientFd = -1;
 
-        ALOGV("%s Constructing camera socket server...", __FUNCTION__);
-        mSocketServerFd = socket(AF_UNIX, SOCK_STREAM, 0);
-        if (mSocketServerFd < 0)
-        {
-            ALOGE("%s:%d Fail to construct camera socket with error: %s",
-                  __FUNCTION__, __LINE__, strerror(errno));
-            return false;
-        }
+	ALOGV("%s Constructing camera socket server...", __FUNCTION__);
+	mSocketServerFd = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (mSocketServerFd < 0) {
+		ALOGE("%s:%d Fail to construct camera socket with error: %s",
+		      __FUNCTION__, __LINE__, strerror(errno));
+		return false;
+	}
 
-        struct sockaddr_un addr;
-        memset(&addr, 0, sizeof(addr));
-        addr.sun_family = AF_UNIX;
-        strncpy(&addr.sun_path[0], mSocketServerFile, strlen(mSocketServerFile));
-        if ((access(mSocketServerFile, F_OK)) != -1)
-        {
-            ALOGW("%s camera socket server file is %s", __FUNCTION__, mSocketServerFile);
-            ret = unlink(mSocketServerFile);
-            if (ret < 0)
-            {
-                ALOGW("%s Failed to unlink %s address %d, %s", __FUNCTION__, mSocketServerFile, ret, strerror(errno));
-                return false;
-            }
-        }
-        else
-        {
-            ALOGW("%s camera socket server file %s will created. ", __FUNCTION__, mSocketServerFile);
-        }
+	struct sockaddr_un addr;
+	memset(&addr, 0, sizeof(addr));
+	addr.sun_family = AF_UNIX;
+	strncpy(&addr.sun_path[0], mSocketServerFile,
+		strlen(mSocketServerFile));
+	if ((access(mSocketServerFile, F_OK)) != -1) {
+		ALOGW("%s camera socket server file is %s", __FUNCTION__,
+		      mSocketServerFile);
+		ret = unlink(mSocketServerFile);
+		if (ret < 0) {
+			ALOGW("%s Failed to unlink %s address %d, %s",
+			      __FUNCTION__, mSocketServerFile, ret,
+			      strerror(errno));
+			return false;
+		}
+	} else {
+		ALOGW("%s camera socket server file %s will created. ",
+		      __FUNCTION__, mSocketServerFile);
+	}
 
-        ret = bind(mSocketServerFd, (struct sockaddr *)&addr, sizeof(sa_family_t) + strlen(mSocketServerFile) + 1);
-        if (ret < 0)
-        {
-            ALOGE("%s Failed to bind %s address %d, %s", __FUNCTION__, mSocketServerFile, ret, strerror(errno));
-            return false;
-        }
+	ret = bind(mSocketServerFd, (struct sockaddr *)&addr,
+		   sizeof(sa_family_t) + strlen(mSocketServerFile) + 1);
+	if (ret < 0) {
+		ALOGE("%s Failed to bind %s address %d, %s", __FUNCTION__,
+		      mSocketServerFile, ret, strerror(errno));
+		return false;
+	}
 
-        struct stat st;
-        __mode_t mod = S_IRWXU | S_IRWXG | S_IRWXO;
-        if (fstat(mSocketServerFd, &st) == 0)
-        {
-            mod |= st.st_mode;
-        }
-        chmod(mSocketServerFile, mod);
-        stat(mSocketServerFile, &st);
+	struct stat st;
+	__mode_t mod = S_IRWXU | S_IRWXG | S_IRWXO;
+	if (fstat(mSocketServerFd, &st) == 0) {
+		mod |= st.st_mode;
+	}
+	chmod(mSocketServerFile, mod);
+	stat(mSocketServerFile, &st);
 
-        ret = listen(mSocketServerFd, 5);
-        if (ret < 0)
-        {
-            ALOGE("%s Failed to listen on %s", __FUNCTION__, mSocketServerFile);
-            return false;
-        }
+	ret = listen(mSocketServerFd, 5);
+	if (ret < 0) {
+		ALOGE("%s Failed to listen on %s", __FUNCTION__,
+		      mSocketServerFile);
+		return false;
+	}
 
-        while (mRunning)
-        {
-            socklen_t alen = sizeof(struct sockaddr_un);
-            ALOGV("%s Wait a camera client to connect...", __FUNCTION__);
-            newClientFd = accept(mSocketServerFd, (struct sockaddr *)&addr, &alen);
-            if (newClientFd < 0)
-            {
-                ALOGE("%s Fail to accept client. Error: %s",
-                      __func__, strerror(errno));
-            }
-            else
-            {
-                if (mClientFd > 0)
-                {
-                    if (pecf != nullptr)
-                    {
-                        pecf->cameraClientDisconnect(mClientFd);
-                    }
-                    ALOGV("%s Close previours camera client(mClientFd = %d)", __FUNCTION__, mClientFd);
-                    close(mClientFd);
-                    mClientFd = -1;
-                }
-                mClientFd = newClientFd;
-                ALOGV("%s A camera client connected to server. mClientFd = %d", __FUNCTION__, mClientFd);
-                if (pecf != nullptr)
-                {
-                    pecf->cameraClientConnect(mClientFd);
-                }
-            }
-        }
-        ALOGV("%s Quit. %s(%d)", __FUNCTION__, mSocketServerFile, mClientFd);
-        close(mClientFd);
-        mClientFd = -1;
-        close(mSocketServerFd);
-        mSocketServerFd = -1;
-        return true;
-    }
+	while (mRunning) {
+		socklen_t alen = sizeof(struct sockaddr_un);
+		ALOGE("%s Wait a camera client to connect...", __FUNCTION__);
+		newClientFd =
+		    accept(mSocketServerFd, (struct sockaddr *)&addr, &alen);
+		if (newClientFd < 0) {
+			ALOGE("%s Fail to accept client. Error: %s", __func__,
+			      strerror(errno));
+		}
+		mClientFd = newClientFd;
+		int size = 0;
+		static int i;
+		nsecs_t workDoneRealTime = 0;
+		nsecs_t workNewFrame = 0;
+		ClientVideoBuffer *handle =
+		    ClientVideoBuffer::getClientInstance();
 
-} //namespace android
+		int size_vbuf = sizeof(struct VideoBuffer);
+
+		while (mClientFd > 0) {
+			char *fbuffer =
+			    (char *)handle
+				->clientBuf[handle->clientRevCount % 8]
+				.buffer;
+			char *uv_add = (char *)(fbuffer + 307200 + 1);
+
+			struct pollfd fd;
+			int ret;
+
+			fd.fd = mClientFd; // your socket handler
+			fd.events = POLLIN;
+			ret = poll(&fd, 1, 5000); // 5 second for timeout
+			switch (ret) {
+			case -1:
+				ALOGE("%s:  poll -1", __FUNCTION__);
+				break;
+			case 0:
+				// Timeout
+				close(mClientFd);
+				mClientFd = -1;
+				ALOGE("%s:  poll timeouts..", __FUNCTION__);
+				break;
+			default:
+				if ((size = recv(mClientFd, (char *)fbuffer,
+						 460800, MSG_WAITALL)) > 0) {
+					handle->clientRevCount++;
+					ALOGV("Pocket rev %d and "
+					      "size %d",
+					      handle->clientRevCount, size);
+#if 0
+				if (i <= 0){
+					DUMP_FROM_LAPTOP_TO_SERVER(i, fbuffer, 307200, uv_add, 153600);
+					i++;
+				}
+#endif
+				} else {
+					ALOGE("Data not recived !!! %d", errno);
+					break;
+				}
+				break;
+			}
+		}
+	}
+	ALOGE("%s Quit CameraSocketServerThread... %s(%d)", __FUNCTION__,
+	      mSocketServerFile, mClientFd);
+	close(mClientFd);
+	mClientFd = -1;
+	close(mSocketServerFd);
+	mSocketServerFd = -1;
+	return true;
+}
+
+} // namespace android

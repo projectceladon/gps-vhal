@@ -23,7 +23,7 @@
 // *and* LOG_NNDEBUG to enable very verbose logging.
 
 // #define LOG_NDEBUG 0
-// #define LOG_NNDEBUG 0
+#define LOG_NNDEBUG 0
 
 #define LOG_TAG "VirtualCamera_RemoteCamera3"
 
@@ -86,7 +86,7 @@ namespace android
 
     VirtualRemoteCamera3::VirtualRemoteCamera3(int cameraId, struct hw_module_t *module) : VirtualCamera3(cameraId, module)
     {
-        ALOGI("Constructing virtual remote camera 3: ID %d", mCameraID);
+        ALOGE(" Constructing virtual remote camera 3: ID %d", mCameraID);
 
         for (size_t i = 0; i < CAMERA3_TEMPLATE_COUNT; ++i)
         {
@@ -116,12 +116,13 @@ namespace android
 
     void VirtualRemoteCamera3::parseResolutions(const char *frameDims)
     {
+	ALOGE(" %s", __FUNCTION__);
         const size_t kMaxFrameDimsLength = 512;
         size_t frameDimsLength = strnlen(frameDims, kMaxFrameDimsLength);
         if (frameDimsLength == kMaxFrameDimsLength)
         {
-            ALOGE("%s: Frame dimensions string was too long (>= %d)",
-                  __FUNCTION__, frameDimsLength);
+           // ALOGE("%s: Frame dimensions string was too long (>= %d)",
+             //     __FUNCTION__, frameDimsLength);
             return;
         }
         else if (frameDimsLength == 0)
@@ -200,6 +201,8 @@ namespace android
                                              const char *frameDims,
                                              const char *facingDir)
     {
+        ALOGE(" %s", __FUNCTION__);
+
         if (mStatus != STATUS_ERROR)
         {
             ALOGE("%s: Already initialized!", __FUNCTION__);
@@ -239,11 +242,13 @@ namespace android
             return res;
         }
 
-        return VirtualCamera3::Initialize();
+        return VirtualCamera3::Initialize(deviceName, frameDims, facingDir);
     }
 
     status_t VirtualRemoteCamera3::connectCamera(hw_device_t **device)
     {
+        ALOGE(" %s", __FUNCTION__);
+
         Mutex::Autolock l(mLock);
         status_t res;
 
@@ -337,6 +342,8 @@ namespace android
 
     status_t VirtualRemoteCamera3::getCameraInfo(struct camera_info *info)
     {
+        ALOGE(" %s", __FUNCTION__);
+
         info->facing = mFacingBack ? CAMERA_FACING_BACK : CAMERA_FACING_FRONT;
         info->orientation = gVirtualCameraFactory.getFakeCameraOrientation();
         return VirtualCamera3::getCameraInfo(info);
@@ -345,7 +352,7 @@ namespace android
     status_t VirtualRemoteCamera3::setCameraFD(int socketFd)
     {
         mCameraSocketFD = socketFd;
-        ALOGV("%s Set mCameraSocketFD to %d", __func__, mCameraSocketFD);
+        ALOGV(" %s Set mCameraSocketFD to %d", __func__, mCameraSocketFD);
         if (mSensor != nullptr)
         {
             mSensor->setCameraFD(socketFd);
@@ -372,7 +379,7 @@ namespace android
         camera3_stream_configuration *streamList)
     {
         Mutex::Autolock l(mLock);
-        ALOGV("%s: %d streams", __FUNCTION__, streamList->num_streams);
+        ALOGE(" %s: %d streams", __FUNCTION__, streamList->num_streams);
 
         if (mStatus != STATUS_OPEN && mStatus != STATUS_READY)
         {
@@ -554,6 +561,8 @@ namespace android
     const camera_metadata_t *VirtualRemoteCamera3::constructDefaultRequestSettings(
         int type)
     {
+        ALOGE(" %s", __FUNCTION__);
+
         Mutex::Autolock l(mLock);
 
         if (type < 0 || type >= CAMERA3_TEMPLATE_COUNT)
@@ -825,6 +834,8 @@ namespace android
     {
         Mutex::Autolock l(mLock);
         status_t res;
+
+        ALOGE(" %s", __FUNCTION__);
 
         /* Validation */
 
@@ -1211,6 +1222,8 @@ namespace android
     status_t VirtualRemoteCamera3::getCameraCapabilities()
     {
         const char *key = mFacingBack ? "remote.sf.back_camera_caps" : "remote.sf.front_camera_caps";
+
+        ALOGE(" %s", __FUNCTION__);
 
         /*
         * Defined by 'remote.sf.*_camera_caps' boot property: if the property doesn't
@@ -2070,8 +2083,8 @@ namespace android
         switch (e)
         {
         case RemoteSensor::RemoteSensorListener::EXPOSURE_START:
-            ALOGVV("%s: Frame %d: Sensor started exposure at %lld",
-                   __FUNCTION__, frameNumber, timestamp);
+        //    ALOGVV("%s: Frame %d: Sensor started exposure at %lld",
+           //        __FUNCTION__, frameNumber, timestamp);
             // Trigger shutter notify to framework.
             camera3_notify_msg_t msg;
             msg.type = CAMERA3_MSG_SHUTTER;
@@ -2192,8 +2205,9 @@ namespace android
             return true;
         }
 
-        ALOGVV("Sensor done with readout for frame %d, captured at %lld ",
-               mCurrentRequest.frameNumber, captureTime);
+
+//        ALOGVV("Sensor done with readout for frame %d, captured at %lld ",
+  //             mCurrentRequest.frameNumber, captureTime);
 
         /*
         * Check if we need to JPEG encode a buffer, and send it for async
@@ -2285,7 +2299,11 @@ namespace android
         result.frame_number = mCurrentRequest.frameNumber;
         result.result = mCurrentRequest.settings.getAndLock();
         result.num_output_buffers = mCurrentRequest.buffers->size();
+	ALOGV(" output buffer count %d",result.num_output_buffers);
         result.output_buffers = mCurrentRequest.buffers->array();
+	/*for(int i = 0; i < 1000; i++) {
+		result.output_buffers[0].buffers[i] = 0x00;
+        }*/
         result.input_buffer = nullptr;
         result.partial_result = 1;
 

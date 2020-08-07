@@ -23,7 +23,7 @@
  *  - etc.
  */
 
-// #define LOG_NDEBUG 0
+ #define LOG_NDEBUG 1
 #define LOG_TAG "VirtualCamera_Device"
 #include <log/log.h>
 #include <sys/select.h>
@@ -67,7 +67,7 @@ namespace android
      * Virtual camera device public API
      ***************************************************************************/
 
-    status_t VirtualCameraDevice::Initialize()
+    status_t VirtualCameraDevice::Initialize(const char *name)
     {
         if (isInitialized())
         {

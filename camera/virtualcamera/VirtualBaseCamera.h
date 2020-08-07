@@ -52,7 +52,9 @@ namespace android
          * Return:
          *  NO_ERROR on success, or an appropriate error status on failure.
          */
-        virtual status_t Initialize() = 0;
+        virtual status_t Initialize(const char *device_name,
+                            const char *frame_dims,
+                            const char *facing_dir) = 0;
 
         /****************************************************************************
           * Camera API implementation

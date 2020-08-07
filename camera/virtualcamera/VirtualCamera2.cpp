@@ -22,7 +22,7 @@
  * for all camera API calls that defined by camera2_device_ops_t API.
  */
 
-// #define LOG_NDEBUG 0
+#define LOG_NDEBUG 0
 #define LOG_TAG "VirtualCamera2_Camera"
 #include <log/log.h>
 
@@ -77,7 +77,9 @@ namespace android
      * Public API
      ***************************************************************************/
 
-    status_t VirtualCamera2::Initialize()
+    status_t VirtualCamera2::Initialize(const char *device_name,
+                            const char *frame_dims,
+                            const char *facing_dir)
     {
         return NO_ERROR;
     }

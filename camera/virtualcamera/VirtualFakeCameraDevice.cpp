@@ -19,7 +19,7 @@
  * fake camera device.
  */
 
-// #define LOG_NDEBUG 0
+#define LOG_NDEBUG 0
 #define LOG_TAG "VirtualCamera_FakeDevice"
 #include <log/log.h>
 #include "VirtualFakeCamera.h"

@@ -1,7 +1,7 @@
 #ifndef EMU_CAMERA_GRALLOC_MODULE_H
 #define EMU_CAMERA_GRALLOC_MODULE_H
 
-#define LOG_NDEBUG 0
+//#define LOG_NDEBUG 0
 #include <hardware/gralloc.h>
 #include <log/log.h>
 

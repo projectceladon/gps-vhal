@@ -47,7 +47,9 @@ namespace android
 
     public:
         /* Initializes VirtualFakeCamera instance. */
-        status_t Initialize();
+        status_t Initialize(const char *device_name,
+                            const char *frame_dims,
+                            const char *facing_dir);
 
         /****************************************************************************
          * VirtualCamera abstract API implementation.

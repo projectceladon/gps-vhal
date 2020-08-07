@@ -23,7 +23,7 @@
  * API.
  */
 
-// #define LOG_NDEBUG 0
+#define LOG_NDEBUG 0
 #define LOG_TAG "VirtualCamera_Camera"
 #include <log/log.h>
 #include <stdio.h>
@@ -132,7 +132,9 @@ namespace android
      * Public API
      ***************************************************************************/
 
-    status_t VirtualCamera::Initialize()
+    status_t VirtualCamera::Initialize(const char *device_name,
+                            const char *frame_dims,
+                            const char *facing_dir)
     {
         /* Preview formats supported by this HAL. */
         char preview_formats[1024];
@@ -1008,7 +1010,7 @@ namespace android
         mCallbackNotifier.cleanupCBNotifier();
 
         /* Re-init the camera settings in case settings were changed */
-        Initialize();
+        Initialize(nullptr, nullptr, nullptr);
 
         return NO_ERROR;
     }

@@ -16,8 +16,8 @@
 
 #include "WorkerThread.h"
 
-// #define LOG_NDEBUG 0
-#define LOG_TAG "VirtualCamera_WorkerThread"
+#define LOG_NDEBUG 1
+#define LOG_TAG " VirtualCamera_WorkerThread"
 #include <log/log.h>
 
 #include <algorithm>
@@ -38,7 +38,7 @@ namespace android
 
     status_t WorkerThread::startThread(bool oneBurst)
     {
-        ALOGV("Starting worker thread, oneBurst=%s", oneBurst ? "true" : "false");
+        ALOGE(" Starting worker thread, oneBurst=%s", oneBurst ? "true" : "false");
         mOneBurst = oneBurst;
         {
             Mutex::Autolock lock(mRunningMutex);
@@ -49,7 +49,7 @@ namespace android
 
     status_t WorkerThread::stopThread()
     {
-        ALOGV("%s: Stopping worker thread...", __FUNCTION__);
+        ALOGE(" %s: Stopping worker thread...", __FUNCTION__);
 
         Mutex::Autolock lock(mRunningMutex);
         mRunning = false;
@@ -59,7 +59,7 @@ namespace android
 
     status_t WorkerThread::wakeThread()
     {
-        ALOGV("%s: Waking virtual camera device's worker thread...", __FUNCTION__);
+        ALOGE(" %s: Waking virtual camera device's worker thread...", __FUNCTION__);
 
         mRunningCondition.signal();
         return NO_ERROR;
@@ -93,7 +93,7 @@ namespace android
             }
         }
         onThreadExit();
-        ALOGV("%s: Exiting thread, mOneBurst=%s",
+        ALOGE(" %s: Exiting thread, mOneBurst=%s",
               __FUNCTION__, mOneBurst ? "true" : "false");
         return false;
     }

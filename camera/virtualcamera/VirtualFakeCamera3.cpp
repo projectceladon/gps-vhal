@@ -21,8 +21,8 @@
 
 #include <inttypes.h>
 
-// #define LOG_NDEBUG 0
-// #define LOG_NNDEBUG 0
+#define LOG_NDEBUG 0
+//#define LOG_NNDEBUG 0
 #define LOG_TAG "VirtualCamera_FakeCamera3"
 #include <cutils/properties.h>
 #include <log/log.h>
@@ -68,7 +68,7 @@ namespace android
 
     const uint32_t VirtualFakeCamera3::kAvailableRawSizes[4] = {
         640, 480,
-        1280, 720
+        //1280, 720
         //    mSensorWidth, mSensorHeight
     };
 
@@ -116,7 +116,9 @@ namespace android
         }
     }
 
-    status_t VirtualFakeCamera3::Initialize()
+    status_t VirtualFakeCamera3::Initialize(const char *device_name,
+                            const char *frame_dims,
+                            const char *facing_dir)
     {
         ALOGV("%s: E", __FUNCTION__);
         status_t res;
@@ -143,7 +145,7 @@ namespace android
             return res;
         }
 
-        return VirtualCamera3::Initialize();
+        return VirtualCamera3::Initialize(nullptr, nullptr, nullptr);
     }
 
     status_t VirtualFakeCamera3::connectCamera(hw_device_t **device)
@@ -403,6 +405,7 @@ namespace android
                     if (newStream->usage & GRALLOC_USAGE_HW_TEXTURE)
                     {
                         newStream->format = HAL_PIXEL_FORMAT_RGBA_8888;
+			//newStream->format = HAL_PIXEL_FORMAT_YCbCr_420_888;
                     }
                     else if (newStream->usage & GRALLOC_USAGE_HW_VIDEO_ENCODER)
                     {
@@ -985,8 +988,11 @@ namespace android
             const camera3_stream_buffer &srcBuf = request->output_buffers[i];
             StreamBuffer destBuf;
             destBuf.streamId = kGenericStreamId;
-            destBuf.width = srcBuf.stream->width;
-            destBuf.height = srcBuf.stream->height;
+            //destBuf.width = srcBuf.stream->width;
+            //destBuf.height = srcBuf.stream->height;
+	    //Fix ME (dest buffer fixed for 640x480)
+            destBuf.width = 640;
+            destBuf.height = 480;
             // inline with goldfish gralloc
             if (srcBuf.stream->format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED)
             {
@@ -995,6 +1001,7 @@ namespace android
                     if (srcBuf.stream->usage & GRALLOC_USAGE_HW_TEXTURE)
                     {
                         destBuf.format = HAL_PIXEL_FORMAT_RGBA_8888;
+		//	destBuf.format = HAL_PIXEL_FORMAT_YCbCr_420_888;
                     }
                     else if (srcBuf.stream->usage & GRALLOC_USAGE_HW_VIDEO_ENCODER)
                     {
@@ -1016,7 +1023,7 @@ namespace android
 
             if (destBuf.format == HAL_PIXEL_FORMAT_BLOB)
             {
-                needJpeg = true;
+		   needJpeg = true;
             }
 
             // Wait on fence
@@ -1066,7 +1073,7 @@ namespace android
                 }
                 else
                 {
-                    ALOGV("%s, stream format 0x%x width %d height %d buffer 0x%p img 0x%p",
+                    ALOGVV("%s, stream format 0x%x width %d height %d buffer 0x%p img 0x%p",
                           __FUNCTION__, destBuf.format, destBuf.width, destBuf.height,
                           destBuf.buffer, destBuf.img);
                 }
@@ -1095,7 +1102,6 @@ namespace android
          */
         if (needJpeg)
         {
-            ALOGV("%s: needJpeg = %d", __FUNCTION__, needJpeg);
             bool ready = mJpegCompressor->waitForDone(kJpegTimeoutNs);
             if (!ready)
             {
@@ -1281,13 +1287,14 @@ namespace android
             }
         }
 
-        if (width < 640 || height < 480)
+        if (width < 1280 || height < 720)
         {
             width = 640;
             height = 480;
         }
         mSensorWidth = width;
         mSensorHeight = height;
+	ALOGE("%s: [width:height] [%d:%d]", __func__, mSensorWidth, mSensorHeight);
 
 #define ADD_STATIC_ENTRY(name, varptr, count) \
     availableCharacteristicsKeys.add(name);   \
@@ -1330,7 +1337,7 @@ namespace android
         ADD_STATIC_ENTRY(ANDROID_SENSOR_INFO_ACTIVE_ARRAY_SIZE,
                          activeArray, 4);
 
-        static const int32_t orientation = 90; // Aligned with 'long edge'
+        static const int32_t orientation = 0; // Aligned with 'long edge'
         ADD_STATIC_ENTRY(ANDROID_SENSOR_ORIENTATION, &orientation, 1);
 
         static const uint8_t timestampSource = ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME;
@@ -1508,18 +1515,6 @@ namespace android
             176,
             144,
             ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT,
-            HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED,
-            1280,
-            720,
-            ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT,
-            HAL_PIXEL_FORMAT_YCbCr_420_888,
-            1280,
-            720,
-            ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT,
-            HAL_PIXEL_FORMAT_BLOB,
-            1280,
-            720,
-            ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT,
         };
 
         // Always need to include 640x480 in basic formats
@@ -1613,18 +1608,6 @@ namespace android
             176,
             144,
             Sensor::kFrameDurationRange[0],
-            HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED,
-            1280,
-            720,
-            Sensor::kFrameDurationRange[0],
-            HAL_PIXEL_FORMAT_YCbCr_420_888,
-            1280,
-            720,
-            Sensor::kFrameDurationRange[0],
-            HAL_PIXEL_FORMAT_BLOB,
-            1280,
-            720,
-            Sensor::kFrameDurationRange[0],
         };
 
         // Always need to include 640x480 in basic formats
@@ -1717,18 +1700,6 @@ namespace android
             HAL_PIXEL_FORMAT_RGBA_8888,
             176,
             144,
-            0,
-            HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED,
-            1280,
-            720,
-            0,
-            HAL_PIXEL_FORMAT_YCbCr_420_888,
-            1280,
-            720,
-            0,
-            HAL_PIXEL_FORMAT_RGBA_8888,
-            1280,
-            720,
             0,
         };
 
@@ -2301,13 +2272,13 @@ namespace android
 
         if (precaptureTrigger)
         {
-            ALOGV("%s: Pre capture trigger = %d", __FUNCTION__, precaptureTrigger);
+//            ALOGV("%s: Pre capture trigger = %d", __FUNCTION__, precaptureTrigger);
         }
         else if (e.count > 0)
         {
-            ALOGV("%s: Pre capture trigger was present? %zu",
-                  __FUNCTION__,
-                  e.count);
+  //          ALOGV("%s: Pre capture trigger was present? %zu",
+    //              __FUNCTION__,
+      //            e.count);
         }
 
         if (precaptureTrigger || mAeState == ANDROID_CONTROL_AE_STATE_PRECAPTURE)
@@ -2416,8 +2387,8 @@ namespace android
         {
             afTrigger = static_cast<af_trigger_t>(e.data.u8[0]);
 
-            ALOGV("%s: AF trigger set to 0x%x", __FUNCTION__, afTrigger);
-            ALOGV("%s: AF mode is 0x%x", __FUNCTION__, afMode);
+           // ALOGV("%s: AF trigger set to 0x%x", __FUNCTION__, afTrigger);
+           // ALOGV("%s: AF mode is 0x%x", __FUNCTION__, afMode);
         }
         else
         {
@@ -2776,8 +2747,8 @@ namespace android
         {
         case Sensor::SensorListener::EXPOSURE_START:
         {
-            ALOGVV("%s: Frame %d: Sensor started exposure at %lld",
-                   __FUNCTION__, frameNumber, timestamp);
+  //          ALOGVV("%s: Frame %d: Sensor started exposure at %lld",
+    //               __FUNCTION__, frameNumber, timestamp);
             // Trigger shutter notify to framework
             camera3_notify_msg_t msg;
             msg.type = CAMERA3_MSG_SHUTTER;
@@ -2898,8 +2869,8 @@ namespace android
             return true;
         }
 
-        ALOGVV("Sensor done with readout for frame %d, captured at %lld ",
-               mCurrentRequest.frameNumber, captureTime);
+   //     ALOGVV("Sensor done with readout for frame %d, captured at %lld ",
+     //          mCurrentRequest.frameNumber, captureTime);
 
         // Check if we need to JPEG encode a buffer, and send it for async
         // compression if so. Otherwise prepare the buffer for return.

@@ -76,6 +76,7 @@ namespace android
                                                   ExifData *exifData)
     {
         CompressFunc f = (CompressFunc)getSymbol(mDl, "JpegStub_compress");
+
         return (status_t)(*f)(&mStub, image, width, height, quality, exifData);
     }
 

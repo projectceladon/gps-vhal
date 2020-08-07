@@ -45,7 +45,9 @@ namespace android
 
     public:
         /* Initializes VirtualRemoteCamera2 instance. */
-        status_t Initialize();
+        status_t Initialize(const char *device_name,
+                            const char *frame_dims,
+                            const char *facing_dir);
 
         /****************************************************************************
          * VirtualCamera abstract API implementation.

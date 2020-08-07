@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// #define LOG_NDEBUG 0
+#define LOG_NDEBUG 0
 #define LOG_TAG "VirtualCamera2_JpegCompressor"
 
 #include <log/log.h>
@@ -131,7 +131,7 @@ namespace android
     bool JpegCompressor::threadLoop()
     {
         status_t res;
-        ALOGV("%s: Starting compression thread", __FUNCTION__);
+        ALOGE("%s: Starting compression thread", __FUNCTION__);
 
         res = compress();
 
@@ -144,6 +144,7 @@ namespace android
 
     status_t JpegCompressor::compress()
     {
+        ALOGV("%s: E:", __FUNCTION__);
         // Find source and target buffers. Assumes only one buffer matches
         // each condition!
         bool mFoundAux = false;
@@ -219,6 +220,7 @@ namespace android
         memcpy(mJpegBuffer.img + hnd->width - sizeof(camera3_jpeg_blob_t),
                &jpeg_blob, sizeof(camera3_jpeg_blob_t));
 
+        ALOGV("%s: X:", __FUNCTION__);
         freeExifData(exifData);
         return OK;
     }

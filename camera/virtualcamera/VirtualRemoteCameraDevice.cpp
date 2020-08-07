@@ -19,7 +19,7 @@
  * an virtual camera device connected to the host.
  */
 
-// #define LOG_NDEBUG 0
+//#define LOG_NDEBUG 0
 #define LOG_TAG "VirtualCamera_RemoteDevice"
 #include <log/log.h>
 #include "VirtualRemoteCamera.h"
@@ -44,6 +44,7 @@ namespace android
 
     status_t VirtualRemoteCameraDevice::Initialize(const char *device_name)
     {
+	ALOGV(" %s", __FUNCTION__);
         /* Connect to the service. */
         char connect_str[256];
         memset(connect_str, 0, sizeof(connect_str));
@@ -55,7 +56,7 @@ namespace android
         }
 
         /* Initialize base class. */
-        res = VirtualCameraDevice::Initialize();
+        res = VirtualCameraDevice::Initialize(device_name);
         if (res == NO_ERROR)
         {
             ALOGV("%s: Connected to the virtual camera service '%s'",
@@ -246,6 +247,8 @@ namespace android
                                                        uint32_t pixelFormat,
                                                        int64_t *timestamp)
     {
+        ALOGV("%s", __FUNCTION__);
+
         if (!isStarted())
         {
             ALOGE("%s: Device is not started", __FUNCTION__);
@@ -281,6 +284,8 @@ namespace android
     status_t VirtualRemoteCameraDevice::getCurrentPreviewFrame(void *buffer,
                                                               int64_t *timestamp)
     {
+        ALOGV("%s", __FUNCTION__);
+
         if (!isStarted())
         {
             ALOGE("%s: Device is not started", __FUNCTION__);
@@ -312,6 +317,8 @@ namespace android
 
     const void *VirtualRemoteCameraDevice::getCurrentFrame()
     {
+        ALOGV("%s", __FUNCTION__);
+
         if (mCameraThread.get() == nullptr)
         {
             return nullptr;
@@ -333,6 +340,8 @@ namespace android
         auto frameBufferPair = reinterpret_cast<FrameBufferPair *>(buffer);
         uint8_t *rawFrame = frameBufferPair->first;
         uint32_t *previewFrame = frameBufferPair->second;
+
+        ALOGV("%s", __FUNCTION__);
 
         status_t query_res = mRemoteClient.queryFrame(rawFrame, previewFrame,
                                                     mFrameBufferSize,

@@ -22,7 +22,7 @@
  * for all camera API calls that defined by camera3_device_ops_t API.
  */
 
-// #define LOG_NDEBUG 0
+#define LOG_NDEBUG 0
 #define LOG_TAG "VirtualCamera3_Camera"
 #include <log/log.h>
 
@@ -65,7 +65,9 @@ namespace android
      * Public API
      ***************************************************************************/
 
-    status_t VirtualCamera3::Initialize()
+    status_t VirtualCamera3::Initialize(const char *device_name,
+                            const char *frame_dims,
+                            const char *facing_dir)
     {
         ALOGV("%s", __FUNCTION__);
 

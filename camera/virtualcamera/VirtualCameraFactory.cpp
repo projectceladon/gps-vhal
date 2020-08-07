@@ -19,7 +19,7 @@
  * available for emulation.
  */
 
-// #define LOG_NDEBUG 0
+#define LOG_NDEBUG 0
 #define LOG_TAG "VirtualCamera_Factory"
 
 #include "VirtualCameraFactory.h"
@@ -247,7 +247,7 @@ namespace android
                 break;
 
             default:
-                ALOGV("%s map curCameraIdis %d. No map.", __FUNCTION__);
+                //ALOGV("%s map curCameraIdis %d. No map.", __FUNCTION__);
                 break;
             }
         }
@@ -288,7 +288,6 @@ namespace android
             return -ENODEV;
         }
         cameraId = trySwitchRemoteCamera(cameraId);
-        ALOGV("%s:%d mRemoteClient.mCameraSocketFD = %d", __func__, __LINE__, mRemoteClient.mCameraSocketFD);
 
         return mVirtualCameras[cameraId]->connectCamera(device);
     }
@@ -437,6 +436,7 @@ namespace android
     void VirtualCameraFactory::findRemoteCameras(
         std::vector<RemoteCameraInfo> *remoteCameras)
     {
+	ALOGV("%s", __func__);
         // Obtain camera list.
         char *cameraList = nullptr;
         status_t res = mRemoteClient.listCameras(&cameraList);
@@ -653,7 +653,7 @@ namespace android
         {
             ALOGV("%s: %s camera device version is %d", __FUNCTION__,
                   backCamera ? "Back" : "Front", halVersion);
-            status_t res = mVirtualCameras[mVirtualCameraNum]->Initialize();
+            status_t res = mVirtualCameras[mVirtualCameraNum]->Initialize( nullptr, nullptr, nullptr);
             if (res == NO_ERROR)
             {
                 // Camera creation and initialization was successful.

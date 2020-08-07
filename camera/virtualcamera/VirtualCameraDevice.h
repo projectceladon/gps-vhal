@@ -124,7 +124,7 @@ namespace android
          * Return:
          *  NO_ERROR on success, or an appropriate error status.
          */
-        virtual status_t Initialize();
+        virtual status_t Initialize(const char *name);
 
         /* Initializes the white balance modes parameters.
          * The parameters are passed by each individual derived camera API to
