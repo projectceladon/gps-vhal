@@ -456,7 +456,6 @@ void Sensor::captureRGBA(uint8_t *img, uint32_t gain, uint32_t width,
 		ALOGV("%s: Total Frame recv vs Total Renderred [%d:%d]",
 		      __func__, handle->clientRevCount,
 		      handle->clientUsedCount);
-		// return;// Debug Point if frame not updating
 	}
 	handle->clientUsedCount++;
 
@@ -595,9 +594,7 @@ void Sensor::captureNV21(uint8_t *img, uint32_t gain, uint32_t width,
 		ALOGV("%s: Total Frame recv vs Total Renderred [%d:%d]",
 		      __func__, handle->clientRevCount,
 		      handle->clientUsedCount);
-		// return; // Debug point if frame not updating.
 	}
-	handle->clientUsedCount++;
 
 	width = 640;
 	height = 480;

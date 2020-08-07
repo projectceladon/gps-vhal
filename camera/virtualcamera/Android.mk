@@ -21,8 +21,8 @@ include $(CLEAR_VARS)
 
 emulator_camera_module_relative_path := hw
 emulator_camera_cflags := -fno-short-enums -DREMOTE_HARDWARE
-emulator_camera_cflags += -Wno-unused-parameter -Wno-missing-field-initializers
-emulator_camera_clang_flags := -Wno-c++11-narrowing -Werror
+emulator_camera_cflags += -Wno-unused-parameter -Wno-missing-field-initializers 
+emulator_camera_clang_flags := -Wno-c++11-narrowing -Werror  
 emulator_camera_shared_libraries := \
     libbinder \
     libexif \

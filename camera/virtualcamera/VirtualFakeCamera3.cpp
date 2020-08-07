@@ -38,12 +38,17 @@
 
 #include <vector>
 #include <algorithm>
+#include <thread>
+#include <chrono>
 
 #if defined(LOG_NNDEBUG) && LOG_NNDEBUG == 0
 #define ALOGVV ALOGV
 #else
 #define ALOGVV(...) ((void)0)
 #endif
+using namespace std;
+using namespace chrono;
+using namespace chrono_literals;
 
 namespace android
 {
@@ -153,6 +158,19 @@ namespace android
         ALOGV("%s: E", __FUNCTION__);
         Mutex::Autolock l(mLock);
         status_t res;
+//////////////////////////////////////////////////////////////////////////////
+	int sendSize = 0;
+	mCMD = CMD_OPEN_CAMERA;
+	uint32_t *cmd = &mCMD;
+	mSocketfd = gVirtualCameraFactory.getSocketFd();
+        ALOGV("%s: mSocketfd: %d", __FUNCTION__, mSocketfd);
+	if (mSocketfd > 0) {
+		if((sendSize = send(mSocketfd, cmd, sizeof(cmd), 0) < 0)){
+        		ALOGE("%s: Command CMD_OPEN_CAMERA send fail. sendSize: %d, err %s ", __FUNCTION__, sendSize, strerror(errno));
+			mCMD = CMD_NONE_CAMERA;
+		}
+	}
+//////////////////////////////////////////////////////////////////////////////
 
         if (mStatus != STATUS_CLOSED)
         {
@@ -196,6 +214,35 @@ namespace android
     {
         ALOGV("%s: E", __FUNCTION__);
         status_t res;
+//////////////////////////////////////////////////////////////////////////////////
+		int sendSize = 0;
+			mCMD = CMD_CLOSE_CAMERA;
+			uint32_t *cmd = &mCMD;
+
+		//Workaround: first time after flash camera open close happens very fast
+		//and start video stream didnt starts properly so need wait for start
+		//stream. Need to be removed later once handle startPublication properly in remote 
+		//client.
+
+		static int initial_wait = 0;
+		const int CALL_COUNT = 2;
+		if(initial_wait < CALL_COUNT) {
+				ALOGV("%s: initial wait: %d", __FUNCTION__, initial_wait);
+			std::this_thread::sleep_for(2000ms);
+		}
+		initial_wait++;
+
+			mSocketfd = gVirtualCameraFactory.getSocketFd();
+			ALOGV("%s: mSocketfd: %d", __FUNCTION__, mSocketfd);
+
+		if (mSocketfd > 0) {
+			if((sendSize = send(mSocketfd, cmd, sizeof(cmd), 0) < 0)){
+					ALOGE("%s: Command CMD_CLOSE_CAMERA send fail. sendSize: %d, err  %s", __FUNCTION__, sendSize, strerror(errno));
+				mCMD = CMD_NONE_CAMERA;
+			}
+		}
+//////////////////////////////////////////////////////////////////////////////////
+
         {
             Mutex::Autolock l(mLock);
             if (mStatus == STATUS_CLOSED)
@@ -227,7 +274,7 @@ namespace android
             mStreams.clear();
             mReadoutThread.clear();
         }
-
+	mCMD = CMD_NONE_CAMERA;
         return VirtualCamera3::closeCamera();
     }
 
@@ -988,11 +1035,11 @@ namespace android
             const camera3_stream_buffer &srcBuf = request->output_buffers[i];
             StreamBuffer destBuf;
             destBuf.streamId = kGenericStreamId;
-            //destBuf.width = srcBuf.stream->width;
-            //destBuf.height = srcBuf.stream->height;
+            destBuf.width = srcBuf.stream->width;
+            destBuf.height = srcBuf.stream->height;
 	    //Fix ME (dest buffer fixed for 640x480)
-            destBuf.width = 640;
-            destBuf.height = 480;
+            //destBuf.width = 640;
+            //destBuf.height = 480;
             // inline with goldfish gralloc
             if (srcBuf.stream->format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED)
             {

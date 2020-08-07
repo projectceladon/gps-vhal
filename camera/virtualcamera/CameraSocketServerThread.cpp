@@ -13,9 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-//#define LOG_NDEBUG 0
+#define LOG_NDEBUG 0
+//#define LOG_NNDEBUG 0
 #define LOG_TAG "CameraSocketServerThread"
 #include <log/log.h>
+
+#ifdef LOG_NNDEBUG
+#define ALOGVV(...) ALOGV(__VA_ARGS__)
+#else
+#define ALOGVV(...) ((void)0)
+#endif
 
 #include <fcntl.h>
 #include <sys/inotify.h>
@@ -41,6 +48,14 @@
 			ALOGE("open failed!!!");                               \
 		}                                                              \
 	})
+
+#if 0
+	if (i <= 0){
+		DUMP_FROM_LAPTOP_TO_SERVER(i, fbuffer, 307200, uv_add, 153600);
+		i++;
+	}
+#endif
+
 android::ClientVideoBuffer *android::ClientVideoBuffer::ic_instance = 0;
 
 namespace android
@@ -71,6 +86,7 @@ CameraSocketServerThread::~CameraSocketServerThread()
 	if (mClientFd > 0) {
 		close(mClientFd);
 		mClientFd = -1;
+		gVirtualCameraFactory.setSocketFd(mClientFd);
 	}
 	if (mSocketServerFd > 0) {
 		close(mSocketServerFd);
@@ -111,7 +127,7 @@ bool CameraSocketServerThread::threadLoop()
 	int ret = 0;
 	int newClientFd = -1;
 
-	ALOGV("%s Constructing camera socket server...", __FUNCTION__);
+	ALOGI("%s: Constructing camera socket server...", __FUNCTION__);
 	mSocketServerFd = socket(AF_UNIX, SOCK_STREAM, 0);
 	if (mSocketServerFd < 0) {
 		ALOGE("%s:%d Fail to construct camera socket with error: %s",
@@ -164,71 +180,75 @@ bool CameraSocketServerThread::threadLoop()
 
 	while (mRunning) {
 		socklen_t alen = sizeof(struct sockaddr_un);
-		ALOGE("%s Wait a camera client to connect...", __FUNCTION__);
+		ALOGE("%s: Wait for camera client to connect...", __FUNCTION__);
 		newClientFd =
 		    accept(mSocketServerFd, (struct sockaddr *)&addr, &alen);
+		ALOGE("%s: Accepted client connect... %d", __FUNCTION__, newClientFd);
 		if (newClientFd < 0) {
-			ALOGE("%s Fail to accept client. Error: %s", __func__,
+			ALOGE("%s: Fail to accept client. Error: %s", __FUNCTION__,
 			      strerror(errno));
+			continue;
 		}
 		mClientFd = newClientFd;
+		
+		gVirtualCameraFactory.setSocketFd(mClientFd);
+		
 		int size = 0;
 		static int i;
-		nsecs_t workDoneRealTime = 0;
-		nsecs_t workNewFrame = 0;
+		struct pollfd fd;
+		int ret;
+		int event;
+		
 		ClientVideoBuffer *handle =
 		    ClientVideoBuffer::getClientInstance();
 
-		int size_vbuf = sizeof(struct VideoBuffer);
+		fd.fd = mClientFd; // your socket handler
+		fd.events = POLLIN | POLLHUP;
 
-		while (mClientFd > 0) {
+		while (true) {
 			char *fbuffer =
 			    (char *)handle
 				->clientBuf[handle->clientRevCount % 8]
 				.buffer;
 			char *uv_add = (char *)(fbuffer + 307200 + 1);
 
-			struct pollfd fd;
-			int ret;
+			ret = poll(&fd, 1, 3000); // 1 second for timeout
+			// check if there are any events on fd.
+			// if event is POLLHUP, then socket/fd is closed at the other end.
+			//   you can close this socket.
+			// if event is POLLIN, then data is available in socket/fd.
+			//   you can read data from this socket.
 
-			fd.fd = mClientFd; // your socket handler
-			fd.events = POLLIN;
-			ret = poll(&fd, 1, 5000); // 5 second for timeout
-			switch (ret) {
-			case -1:
-				ALOGE("%s:  poll -1", __FUNCTION__);
-				break;
-			case 0:
-				// Timeout
+			//if (POLLHUP) { ... }
+			//else if (POLLIN) { recv()... }
+			//else /* timeout */ { continue poll }
+			
+			event = fd.revents; // returned events
+
+			if (event & POLLHUP) { // connnection disconnected
+				ALOGE("%s: POLLHUP: Close camera socket connection", __FUNCTION__);
 				close(mClientFd);
 				mClientFd = -1;
-				ALOGE("%s:  poll timeouts..", __FUNCTION__);
+				gVirtualCameraFactory.setSocketFd(mClientFd);
 				break;
-			default:
-				if ((size = recv(mClientFd, (char *)fbuffer,
-						 460800, MSG_WAITALL)) > 0) {
+			} else if(event & POLLIN) { // preview / record
+				if ((size = recv(mClientFd, (char *)fbuffer,	
+					 460800, MSG_WAITALL)) > 0) {
 					handle->clientRevCount++;
-					ALOGV("Pocket rev %d and "
-					      "size %d",
+					ALOGVV("%s: Pocket rev %d and "
+					      "size %d", __FUNCTION__,
 					      handle->clientRevCount, size);
-#if 0
-				if (i <= 0){
-					DUMP_FROM_LAPTOP_TO_SERVER(i, fbuffer, 307200, uv_add, 153600);
-					i++;
 				}
-#endif
-				} else {
-					ALOGE("Data not recived !!! %d", errno);
-					break;
-				}
-				break;
+			} else {
+				//	ALOGE("%s: continue polling..", __FUNCTION__);
 			}
 		}
 	}
-	ALOGE("%s Quit CameraSocketServerThread... %s(%d)", __FUNCTION__,
+	ALOGE("%s: Quit CameraSocketServerThread... %s(%d)", __FUNCTION__,
 	      mSocketServerFile, mClientFd);
 	close(mClientFd);
 	mClientFd = -1;
+	gVirtualCameraFactory.setSocketFd(mClientFd);
 	close(mSocketServerFd);
 	mSocketServerFd = -1;
 	return true;

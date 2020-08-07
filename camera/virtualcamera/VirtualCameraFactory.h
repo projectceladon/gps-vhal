@@ -177,7 +177,25 @@ namespace android
         {
             return mVirtualCameraNum;
         }
-
+        
+	int getSocketFd() 
+        {
+            return mSocketFdHandle;
+        }
+	
+	void setSocketFd(int fd) 
+        {
+             mSocketFdHandle = fd;
+        }
+	
+	bool IsClientClosed()
+	{
+		return mClientAvailable;	
+	}
+	void setClientAvailability(bool status)
+	{
+		mClientAvailable = status;
+	}
         /*
          * Checks whether or not the constructor has succeeded.
          */
@@ -269,6 +287,12 @@ namespace android
 
         // Number of virtual fake cameras.
         int mFakeCameraNum;
+	
+	//socketFD handle
+	int mSocketFdHandle;
+
+	//flag to know weather client closed
+	bool mClientAvailable = true;
 
         // Flags whether or not constructor has succeeded.
         bool mConstructedOK;

@@ -289,6 +289,15 @@ namespace android
         nsecs_t mAeCurrentExposureTime;
         nsecs_t mAeTargetExposureTime;
         int mAeCurrentSensitivity;
+	int mSocketfd = -1;
+	
+    	enum{
+		CMD_OPEN_CAMERA = 11,
+		CMD_CLOSE_CAMERA = 12,
+		CMD_NONE_CAMERA = 13,
+    	};
+
+	uint32_t mCMD = CMD_NONE_CAMERA;
     };
 
 } // namespace android
