@@ -387,7 +387,14 @@ status_t VirtualFakeCamera3::configureStreams(
     newStream->max_buffers = kMaxBufferCount;
     switch (newStream->stream_type) {
       case CAMERA3_STREAM_OUTPUT:
+#ifndef USE_GRALLOC1
+        // Workarroud: SG1:  HAL_PIXEL_FORMAT_RGBA_8888 &&
+        // GRALLOC_USAGE_HW_CAMERA_WRITE combination doesn't supported by minigbm
         newStream->usage |= GRALLOC_USAGE_HW_CAMERA_WRITE;
+        ALOGE("%s: GRALLOC0", __FUNCTION__);
+#else
+        ALOGE("%s: GRALLOC1", __FUNCTION__);
+#endif
         break;
       case CAMERA3_STREAM_INPUT:
         newStream->usage |= GRALLOC_USAGE_HW_CAMERA_READ;
@@ -399,7 +406,9 @@ status_t VirtualFakeCamera3::configureStreams(
     }
     // Set the buffer format, inline with gralloc implementation
     if (newStream->format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) {
+#ifndef USE_GRALLOC1
       if (newStream->usage & GRALLOC_USAGE_HW_CAMERA_WRITE) {
+#endif
         if (newStream->usage & GRALLOC_USAGE_HW_TEXTURE) {
           newStream->format = HAL_PIXEL_FORMAT_RGBA_8888;
           // newStream->format = HAL_PIXEL_FORMAT_YCbCr_420_888;
@@ -408,7 +417,9 @@ status_t VirtualFakeCamera3::configureStreams(
         } else {
           newStream->format = HAL_PIXEL_FORMAT_RGB_888;
         }
+#ifndef USE_GRALLOC1
       }
+#endif
     }
   }
 
@@ -944,7 +955,9 @@ status_t VirtualFakeCamera3::processCaptureRequest(
     // destBuf.height = 480;
     // inline with goldfish gralloc
     if (srcBuf.stream->format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) {
+#ifndef USE_GRALLOC1
       if (srcBuf.stream->usage & GRALLOC_USAGE_HW_CAMERA_WRITE) {
+#endif
         if (srcBuf.stream->usage & GRALLOC_USAGE_HW_TEXTURE) {
           destBuf.format = HAL_PIXEL_FORMAT_RGBA_8888;
           //	destBuf.format = HAL_PIXEL_FORMAT_YCbCr_420_888;
@@ -954,7 +967,9 @@ status_t VirtualFakeCamera3::processCaptureRequest(
                    GRALLOC_USAGE_HW_CAMERA_ZSL) {
           destBuf.format = HAL_PIXEL_FORMAT_RGB_888;
         }
+#ifndef USE_GRALLOC1
       }
+#endif
     } else {
       destBuf.format = srcBuf.stream->format;
     }
@@ -979,8 +994,13 @@ status_t VirtualFakeCamera3::processCaptureRequest(
         if (destBuf.format == HAL_PIXEL_FORMAT_YCbCr_420_888) {
           android_ycbcr ycbcr = android_ycbcr();
           res = GrallocModule::getInstance().lock_ycbcr(
-              *(destBuf.buffer), GRALLOC_USAGE_HW_CAMERA_WRITE, 0, 0,
-              destBuf.width, destBuf.height, &ycbcr);
+              *(destBuf.buffer),
+#ifdef USE_GRALLOC1
+              GRALLOC1_PRODUCER_USAGE_CPU_WRITE,
+#else
+              GRALLOC_USAGE_HW_CAMERA_WRITE,
+#endif
+              0, 0, destBuf.width, destBuf.height, &ycbcr);
           // This is only valid because we know that emulator's
           // YCbCr_420_888 is really contiguous NV21 under the hood
           destBuf.img = static_cast<uint8_t *>(ycbcr.y);
@@ -991,8 +1011,13 @@ status_t VirtualFakeCamera3::processCaptureRequest(
         }
       } else {
         res = GrallocModule::getInstance().lock(
-            *(destBuf.buffer), GRALLOC_USAGE_HW_CAMERA_WRITE, 0, 0,
-            destBuf.width, destBuf.height, (void **)&(destBuf.img));
+            *(destBuf.buffer),
+#ifdef USE_GRALLOC1
+            GRALLOC1_PRODUCER_USAGE_CPU_WRITE,
+#else
+            GRALLOC_USAGE_HW_CAMERA_WRITE,
+#endif
+            0, 0, destBuf.width, destBuf.height, (void **)&(destBuf.img));
       }
       if (res != OK) {
         ALOGE("%s: Request %d: Buffer %zu: Unable to lock buffer", __FUNCTION__,
