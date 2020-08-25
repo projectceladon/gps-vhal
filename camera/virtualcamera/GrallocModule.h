@@ -38,7 +38,10 @@ class GrallocModule {
       }
 #endif
       default: {
-        ALOGE("no gralloc module to lock");
+        ALOGE(
+            "[Gralloc] no gralloc module to lock; unknown gralloc major "
+            "version (%d)",
+            m_major_version);
         return -1;
       }
     }
@@ -59,6 +62,7 @@ class GrallocModule {
         outRect.top = top;
         outRect.width = width;
         outRect.height = height;
+        int ret = -1;
 
         android_flex_layout flex = {};
         int32_t error = m_gralloc1_getNumFlexPlanes(m_gralloc1_device, handle,
@@ -69,18 +73,22 @@ class GrallocModule {
         std::vector<android_flex_plane_t> flexPlanes(flex.num_planes);
         flex.planes = flexPlanes.data();
 
-        m_gralloc1_lockflex(m_gralloc1_device, handle, usage, usage, &outRect,
-                            &flex, -1);
+        ret = m_gralloc1_lockflex(m_gralloc1_device, handle, usage, usage,
+                                  &outRect, &flex, -1);
         ycbcr->y = flex.planes[0].top_left;
         ycbcr->cb = flex.planes[1].top_left;
         ycbcr->cr = flex.planes[2].top_left;
         ycbcr->ystride = flex.planes[0].v_increment;
         ycbcr->cstride = flex.planes[1].v_increment;
         ycbcr->chroma_step = flex.planes[2].h_increment;
+        return ret;
       }
 #endif
       default: {
-        ALOGE("no gralloc module to lock");
+        ALOGE(
+            "[Gralloc] no gralloc module to lock; unknown gralloc major "
+            "version (%d)",
+            m_major_version);
         return -1;
       }
     }
@@ -104,7 +112,10 @@ class GrallocModule {
       }
 #endif
       default: {
-        ALOGE("no gralloc module to unlock");
+        ALOGE(
+            "[Gralloc] no gralloc module to unlock; unknown gralloc major "
+            "version (%d)",
+            m_major_version);
         return -1;
       }
     }
@@ -139,7 +150,7 @@ class GrallocModule {
         break;
 #endif
       default:
-        ALOGE("unknown gralloc major version (%d)", m_major_version);
+        ALOGE("[Gralloc] unknown gralloc major version (%d)", m_major_version);
         break;
     }
   }
