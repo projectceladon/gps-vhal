@@ -1155,8 +1155,7 @@ static ssize_t in_read(struct audio_stream_in *stream, void *buffer,
     ALOGV("in_read: %p, bytes %zu", buffer, bytes);
 
     struct stub_stream_in *in = (struct stub_stream_in *)stream;
-    ssize_t ret = bytes;
-    ssize_t result = -1;
+    ssize_t ret = bytes, result = -1;
 
     /* XXX: fake timing for audio input */
     struct timespec t = {.tv_sec = 0, .tv_nsec = 0};
@@ -1189,7 +1188,8 @@ static ssize_t in_read(struct audio_stream_in *stream, void *buffer,
             }
         }
 
-        result = in_read_from_client(stream, buffer, bytes, sleep_time, -1);
+        const int TIMEOUT_MS = 500;
+        result = in_read_from_client(stream, buffer, bytes, TIMEOUT_MS, -1);
         if (result < 0)
         {
             ALOGV("The result of in_read_from_client is %zd", result);
@@ -1804,7 +1804,7 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
 static void adev_close_input_stream(struct audio_hw_device *dev,
                                     struct audio_stream_in *stream)
 {
-    ALOGV("%s...", __func__);
+    ALOGI("%s...", __func__);
     if (ass.in_fd > 0)
     {
         if (send_close_cmd(ass.in_fd) < 0)
@@ -1813,20 +1813,19 @@ static void adev_close_input_stream(struct audio_hw_device *dev,
         }
         close(ass.in_fd);
         ass.in_fd = -1;
-        ass.in_share_fd = -1;
-        ass.in_share_buffer_size = 0;
-
-        free(ass.ssi);
-        ass.ssi = NULL;
-        free(stream);
-#ifdef PCM_RECORD_DUMP
-        if (fp_write)
-        {
-            fclose(fp_write);
-            fp_write = NULL;
-        }
-#endif
     }
+    ass.in_share_fd = -1;
+    ass.in_share_buffer_size = 0;
+
+    ass.ssi = NULL;
+    free(stream);
+#ifdef PCM_RECORD_DUMP
+    if (fp_write)
+    {
+        fclose(fp_write);
+        fp_write = NULL;
+    }
+#endif
 }
 
 static int adev_dump(const audio_hw_device_t *device, int fd)
