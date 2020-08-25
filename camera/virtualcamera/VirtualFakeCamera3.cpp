@@ -389,7 +389,8 @@ status_t VirtualFakeCamera3::configureStreams(
       case CAMERA3_STREAM_OUTPUT:
 #ifndef USE_GRALLOC1
         // Workarroud: SG1:  HAL_PIXEL_FORMAT_RGBA_8888 &&
-        // GRALLOC_USAGE_HW_CAMERA_WRITE combination doesn't supported by minigbm
+        // GRALLOC_USAGE_HW_CAMERA_WRITE combination doesn't supported by
+        // minigbm
         newStream->usage |= GRALLOC_USAGE_HW_CAMERA_WRITE;
         ALOGE("%s: GRALLOC0", __FUNCTION__);
 #else
@@ -802,8 +803,10 @@ const camera_metadata_t *VirtualFakeCamera3::constructDefaultRequestSettings(
 
 status_t VirtualFakeCamera3::processCaptureRequest(
     camera3_capture_request *request) {
+  ALOGVV("%s: E 1", __FUNCTION__);
   Mutex::Autolock l(mLock);
   status_t res;
+  status_t ret;
 
   /** Validation */
 
@@ -931,6 +934,9 @@ status_t VirtualFakeCamera3::processCaptureRequest(
   sensitivity =
       (entry.count > 0) ? entry.data.i32[0] : Sensor::kSensitivityRange[0];
 
+  ALOGVV("%s: exposureTime:[%f] frameDuration[%f]", __FUNCTION__,
+         exposureTime / 1000000.f, frameDuration / 1000000.f);
+
   if (exposureTime > frameDuration) {
     frameDuration = exposureTime + Sensor::kMinVerticalBlank;
     settings.update(ANDROID_SENSOR_FRAME_DURATION, &frameDuration, 1);
@@ -1010,6 +1016,7 @@ status_t VirtualFakeCamera3::processCaptureRequest(
           res = INVALID_OPERATION;
         }
       } else {
+        ALOGVV("%s: locking gralloc buffer.. 2", __FUNCTION__);
         res = GrallocModule::getInstance().lock(
             *(destBuf.buffer),
 #ifdef USE_GRALLOC1
@@ -1023,7 +1030,7 @@ status_t VirtualFakeCamera3::processCaptureRequest(
         ALOGE("%s: Request %d: Buffer %zu: Unable to lock buffer", __FUNCTION__,
               frameNumber, i);
       } else {
-        ALOGVV("%s, stream format 0x%x width %d height %d buffer 0x%p img 0x%p",
+        ALOGVV("%s: stream format 0x%x width %d height %d buffer[%p] img [%p]",
                __FUNCTION__, destBuf.format, destBuf.width, destBuf.height,
                destBuf.buffer, destBuf.img);
       }
@@ -1033,8 +1040,12 @@ status_t VirtualFakeCamera3::processCaptureRequest(
       // Either waiting or locking failed. Unlock locked buffers and bail
       // out.
       for (size_t j = 0; j < i; j++) {
-        GrallocModule::getInstance().unlock(
+        ret = GrallocModule::getInstance().unlock(
             *(request->output_buffers[i].buffer));
+        if (ret != OK) {
+          ALOGVV("%s: ret[%d] Request %d: Buffer %zu:", __FUNCTION__, ret,
+                 frameNumber, i);
+        }
       }
       delete sensorBuffers;
       delete buffers;
@@ -1044,7 +1055,7 @@ status_t VirtualFakeCamera3::processCaptureRequest(
     sensorBuffers->push_back(destBuf);
     buffers->push_back(srcBuf);
   }
-
+  ALOGVV("%s: unlocked gralloc buffer 3", __FUNCTION__);
   /**
    * Wait for JPEG compressor to not be busy, if needed
    */
@@ -1073,11 +1084,13 @@ status_t VirtualFakeCamera3::processCaptureRequest(
     return NO_INIT;
   }
 
+  ALOGVV("%s: wait complete for readout thread 4", __FUNCTION__);
   /**
    * Wait until sensor's ready. This waits for lengthy amounts of time with
    * mLock held, but the interface spec is that no other calls may by done to
    * the HAL by the framework while process_capture_request is happening.
    */
+
   int syncTimeoutCount = 0;
   while (!mSensor->waitForVSync(kSyncWaitTimeout)) {
     if (mStatus == STATUS_ERROR) {
@@ -1092,6 +1105,7 @@ status_t VirtualFakeCamera3::processCaptureRequest(
     syncTimeoutCount++;
   }
 
+  ALOGVV("%s: waitForSync done! 5", __FUNCTION__);
   /**
    * Configure sensor and queue up the request to the readout thread
    */
@@ -1112,6 +1126,7 @@ status_t VirtualFakeCamera3::processCaptureRequest(
 
   // Cache the settings for next time
   mPrevSettings.acquire(settings);
+  ALOGVV("%s: X 6", __FUNCTION__);
 
   return OK;
 }

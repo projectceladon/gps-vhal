@@ -40,25 +40,20 @@
 #include "CameraSocketServerThread.h"
 #include "VirtualBuffer.h"
 #include "VirtualCameraFactory.h"
-#define DUMP_FROM_LAPTOP_TO_SERVER(filename, p_addr1, len1, p_addr2, len2) \
-  ({                                                                       \
-    size_t rc = 0;                                                         \
-    FILE *fp = fopen("/ipc/filename.yuv", "w+");                           \
-    if (fp) {                                                              \
-      rc = fwrite(p_addr1, 1, len1, fp);                                   \
-      rc = fwrite(p_addr2, 1, len2, fp);                                   \
-      fclose(fp);                                                          \
-    } else {                                                               \
-      ALOGE("open failed!!!");                                             \
-    }                                                                      \
-  })
 
-#if 0
-	if (i <= 0){
-		DUMP_FROM_LAPTOP_TO_SERVER(i, fbuffer, 307200, uv_add, 153600);
-		i++;
-	}
-#endif
+#define DUMP_FROM_LAPTOP_TO_SERVER(dump_index, p_addr1, len1)             \
+  ({                                                                      \
+    size_t rc = 0;                                                        \
+    char filename[64] = {'\0'};                                           \
+    snprintf(filename, sizeof(filename), "/ipc/vHAL_yuv_%d", dump_index); \
+    FILE *fp = fopen(filename, "w+");                                     \
+    if (fp) {                                                             \
+      rc = fwrite(p_addr1, 1, len1, fp);                                  \
+      fclose(fp);                                                         \
+    } else {                                                              \
+      ALOGE("open failed!!!");                                            \
+    }                                                                     \
+  })
 
 android::ClientVideoBuffer *android::ClientVideoBuffer::ic_instance = 0;
 
@@ -123,6 +118,9 @@ bool CameraSocketServerThread::threadLoop() {
   int ret = 0;
   int newClientFd = -1;
   int port = 8080;
+#if 0
+  static int dump_index = 0;
+#endif
   int so_reuseaddr = 1;
   struct sockaddr_in addr_ip;
   struct sockaddr_un addr_un;
@@ -225,11 +223,9 @@ bool CameraSocketServerThread::threadLoop() {
     gVirtualCameraFactory.setSocketFd(mClientFd);
 
     int size = 0;
-    static int i;
     struct pollfd fd;
     int ret;
     int event;
-
     ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
 
     fd.fd = mClientFd;  // your socket handler
@@ -278,11 +274,19 @@ bool CameraSocketServerThread::threadLoop() {
         } else if (event & POLLIN) {  // preview / record
           if ((size = recv(mClientFd, (char *)fbuffer, 460800, MSG_WAITALL)) >
               0) {
+#if 0
+//Dump point: I420 frames can be dumped received from remote client
+		if (dump_index < 300){
+			  ALOGE("Dump frame dump_index[%d]", dump_index);
+			  DUMP_FROM_LAPTOP_TO_SERVER(dump_index, fbuffer, 460800);
+		}
+	    dump_index++;
+#endif
             handle->clientRevCount++;
             ALOGVV(
                 "%s: Pocket rev %d and "
-                "size %d",
-                __FUNCTION__, handle->clientRevCount, size);
+                "size %d fbuffer[%p]",
+                __FUNCTION__, handle->clientRevCount, size, fbuffer);
           }
         } else {
           //	ALOGE("%s: continue polling..", __FUNCTION__);
