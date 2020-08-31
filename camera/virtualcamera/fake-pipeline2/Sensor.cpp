@@ -451,12 +451,10 @@ void Sensor::captureRGBA(uint8_t *img, uint32_t gain, uint32_t width,
   height = 480;
   ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
 
-  uint8_t *bufData = handle->clientBuf[handle->clientUsedCount % 8].buffer;
+  uint8_t *bufData = handle->clientBuf[handle->clientRevCount % 1].buffer;
 
-  //	if (handle->clientRevCount < handle->clientUsedCount) {
-  //		ALOGV("%s: Total Frame recv vs Total Renderred [%d:%d]",
-  ALOGVV("%s: Total Frame recv vs Total Renderred [%d:%d] bufData[%p]",
-         __func__, handle->clientRevCount, handle->clientUsedCount, bufData);
+  ALOGVV("%s: Total Frame recv vs Total Renderred [%d:%d] bufData[%p] img[%p]",
+         __func__, handle->clientRevCount, handle->clientUsedCount, bufData, img);
   handle->clientUsedCount++;
 
   uint8_t *pTempY = bufData;
@@ -475,6 +473,9 @@ void Sensor::captureRGBA(uint8_t *img, uint32_t gain, uint32_t width,
       j++;
 #endif
 
+//Bug: OAM-92276
+//Below Logic takes almost ~195ms in SG1 set-up but in Xeon <1ms
+//which leads to tearing. Due to that using libYUV conversion
 #if 0
   uint32_t w, h;
   int shift = 14, offset = 8192;
@@ -599,11 +600,10 @@ void Sensor::captureNV21(uint8_t *img, uint32_t gain, uint32_t width,
 
   ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
 
-  uint8_t *bufData = handle->clientBuf[handle->clientUsedCount % 8].buffer;
-  //	if (handle->clientRevCount < handle->clientUsedCount) {
-  //		ALOGV("%s: Total Frame recv vs Total Renderred [%d:%d]",
-  ALOGVV("%s: Total Frame recv vs Total Renderred [%d:%d] bufData[%p]",
-         __func__, handle->clientRevCount, handle->clientUsedCount, bufData);
+  uint8_t *bufData = handle->clientBuf[handle->clientRevCount % 1].buffer;
+  
+  ALOGVV("%s: Total Frame recv vs Total Renderred [%d:%d] bufData[%p] img[%p]",
+         __func__, handle->clientRevCount, handle->clientUsedCount, bufData, img);
 
   width = 640;
   height = 480;

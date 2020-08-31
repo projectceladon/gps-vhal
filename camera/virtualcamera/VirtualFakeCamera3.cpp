@@ -411,7 +411,6 @@ status_t VirtualFakeCamera3::configureStreams(
 #endif
         if (newStream->usage & GRALLOC_USAGE_HW_TEXTURE) {
           newStream->format = HAL_PIXEL_FORMAT_RGBA_8888;
-          // newStream->format = HAL_PIXEL_FORMAT_YCbCr_420_888;
         } else if (newStream->usage & GRALLOC_USAGE_HW_VIDEO_ENCODER) {
           newStream->format = HAL_PIXEL_FORMAT_YCbCr_420_888;
         } else {

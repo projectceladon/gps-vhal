@@ -31,7 +31,7 @@ class ClientVideoBuffer {
     public:
         static ClientVideoBuffer *ic_instance;
 
-        struct VideoBuffer clientBuf[8];
+        struct VideoBuffer clientBuf[1];
 	unsigned int clientRevCount;
         unsigned int clientUsedCount;
         static ClientVideoBuffer* getClientInstance() {
@@ -42,7 +42,7 @@ class ClientVideoBuffer {
         }
 
         ClientVideoBuffer() {
-	    for(int i = 0; i < 8; i++) {
+	    for(int i = 0; i < 1; i++) {
                 clientBuf[i].buffer = (uint8_t *)malloc(460800);
             }
             clientRevCount = 0;

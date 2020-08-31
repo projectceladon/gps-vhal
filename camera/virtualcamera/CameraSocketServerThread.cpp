@@ -237,7 +237,7 @@ bool CameraSocketServerThread::threadLoop() {
 
     while (true) {
       char *fbuffer =
-          (char *)handle->clientBuf[handle->clientRevCount % 8].buffer;
+          (char *)handle->clientBuf[handle->clientRevCount % 1].buffer;
       char *uv_add = (char *)(fbuffer + 307200 + 1);
       if (mSocktypeIP) {
         if ((size = recv(mClientFd, (char *)fbuffer, 460800, MSG_WAITALL)) >
