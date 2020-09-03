@@ -40,6 +40,7 @@
 #include <chrono>
 #include <thread>
 #include <vector>
+#include "VirtualBuffer.h"
 
 #if defined(LOG_NNDEBUG) && LOG_NNDEBUG == 0
 #define ALOGVV ALOGV
@@ -140,24 +141,36 @@ status_t VirtualFakeCamera3::Initialize(const char *device_name,
   return VirtualCamera3::Initialize(nullptr, nullptr, nullptr);
 }
 
+
+void VirtualFakeCamera3::clearLastBuffer(char * fbuffer, int width, int height){
+
+    ALOGVV(" %s Enter", __FUNCTION__);
+    char *uv_offset = fbuffer + width * height;
+    memset(fbuffer, 0x10, (width*height));
+    memset(uv_offset, 0x80, (width*height)/2);
+    ALOGVV(" %s: Exit", __FUNCTION__);
+}
+
+
+
 status_t VirtualFakeCamera3::connectCamera(hw_device_t **device) {
-  ALOGV("%s: E", __FUNCTION__);
+  ALOGVV(LOG_TAG "%s: E", __FUNCTION__);
   Mutex::Autolock l(mLock);
   status_t res;
-  //////////////////////////////////////////////////////////////////////////////
+
   int sendSize = 0;
   mCMD = CMD_OPEN_CAMERA;
   uint32_t *cmd = &mCMD;
+
   mSocketfd = gVirtualCameraFactory.getSocketFd();
-  ALOGV("%s: mSocketfd: %d", __FUNCTION__, mSocketfd);
+  ALOGV(LOG_TAG "%s: CSST: mSocketfd: %d", __FUNCTION__, mSocketfd);
   if (mSocketfd > 0) {
     if ((sendSize = send(mSocketfd, cmd, sizeof(cmd), 0) < 0)) {
-      ALOGE("%s: Command CMD_OPEN_CAMERA send fail. sendSize: %d, err %s ",
+      ALOGE(LOG_TAG "%s: Command CMD_OPEN_CAMERA send fail. sendSize: %d, err %s ",
             __FUNCTION__, sendSize, strerror(errno));
       mCMD = CMD_NONE_CAMERA;
     }
   }
-  //////////////////////////////////////////////////////////////////////////////
 
   if (mStatus != STATUS_CLOSED) {
     ALOGE("%s: Can't connect in state %d", __FUNCTION__, mStatus);
@@ -195,37 +208,34 @@ status_t VirtualFakeCamera3::connectCamera(hw_device_t **device) {
 }
 
 status_t VirtualFakeCamera3::closeCamera() {
-  ALOGV("%s: E", __FUNCTION__);
+  ALOGVV(LOG_TAG " %s: E ", __FUNCTION__);
   status_t res;
-  //////////////////////////////////////////////////////////////////////////////////
+
   int sendSize = 0;
   mCMD = CMD_CLOSE_CAMERA;
   uint32_t *cmd = &mCMD;
   // Workaround: first time after flash camera open close happens very fast
   // and start video stream didnt starts properly so need wait for start
   // stream. Need to be removed later once handle startPublication properly in
-  // remote
+  // remote. If NO processCaptureRequest received between open and close then wait.
 
-  static int initial_wait = 0;
-  const int CALL_COUNT = 2;
-
-  if (initial_wait < CALL_COUNT) {
-    ALOGV("%s: initial wait: %d", __FUNCTION__, initial_wait);
+  if (!mprocessCaptureRequestFlag) {
+    ALOGE(LOG_TAG " %s: wait:..", __FUNCTION__);
     std::this_thread::sleep_for(2000ms);
   }
-  initial_wait++;
 
   mSocketfd = gVirtualCameraFactory.getSocketFd();
-  ALOGV("%s: mSocketfd: %d", __FUNCTION__, mSocketfd);
+  ALOGV(LOG_TAG " %s: CSST:mSocketfd: %d", __FUNCTION__, mSocketfd);
 
   if (mSocketfd > 0) {
     if ((sendSize = send(mSocketfd, cmd, sizeof(cmd), 0) < 0)) {
-      ALOGE("%s: Command CMD_CLOSE_CAMERA send fail. sendSize: %d, err  %s",
+      ALOGE(LOG_TAG "%s: Command CMD_CLOSE_CAMERA send fail. sendSize: %d, err  %s",
             __FUNCTION__, sendSize, strerror(errno));
       mCMD = CMD_NONE_CAMERA;
     }
   }
-  //////////////////////////////////////////////////////////////////////////////////
+
+  mprocessCaptureRequestFlag = false;
 
   {
     Mutex::Autolock l(mLock);
@@ -256,6 +266,15 @@ status_t VirtualFakeCamera3::closeCamera() {
     mReadoutThread.clear();
   }
   mCMD = CMD_NONE_CAMERA;
+
+  ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
+  char *fbuffer =
+        (char *)handle->clientBuf[handle->clientRevCount % 1].buffer;
+  ALOGV(LOG_TAG " %s: clearing buffer[%d]",
+	__FUNCTION__,
+	handle->clientRevCount);
+  clearLastBuffer(fbuffer, 640, 480);
+
   return VirtualCamera3::closeCamera();
 }
 
@@ -458,7 +477,7 @@ status_t VirtualFakeCamera3::registerStreamBuffers(
 
 const camera_metadata_t *VirtualFakeCamera3::constructDefaultRequestSettings(
     int type) {
-  ALOGV("%s: E", __FUNCTION__);
+  ALOGVV("%s: E", __FUNCTION__);
   Mutex::Autolock l(mLock);
 
   if (type < 0 || type >= CAMERA3_TEMPLATE_COUNT) {
@@ -803,7 +822,7 @@ status_t VirtualFakeCamera3::processCaptureRequest(
     camera3_capture_request *request) {
   Mutex::Autolock l(mLock);
   status_t res;
-
+  mprocessCaptureRequestFlag = true;
   /** Validation */
 
   if (mStatus < STATUS_READY) {
@@ -1116,7 +1135,7 @@ status_t VirtualFakeCamera3::processCaptureRequest(
 }
 
 status_t VirtualFakeCamera3::flush() {
-  ALOGW("%s: Not implemented; ignored", __FUNCTION__);
+  ALOGVV("%s: Not implemented; ignored", __FUNCTION__);
   return OK;
 }
 

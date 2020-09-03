@@ -289,14 +289,22 @@ namespace android
         nsecs_t mAeCurrentExposureTime;
         nsecs_t mAeTargetExposureTime;
         int mAeCurrentSensitivity;
+	//socket fd on which camera vHAL send open and close commands
+	// and receive camera frames
 	int mSocketfd = -1;
-	
+	//Flag Indicate processCaptureRequest received from FW.
+	//It helps to identify whether camera open close happened without
+	//processCaptureRequest case. Take care First time camera open close after flash.
+	//Flag becomes important in webRTC case where video stream takes time to open.
+	bool mprocessCaptureRequestFlag = false;
+
     	enum{
 		CMD_OPEN_CAMERA = 11,
 		CMD_CLOSE_CAMERA = 12,
 		CMD_NONE_CAMERA = 13,
     	};
-
+	//Clears camera vHAL buffer
+	void clearLastBuffer(char * fbuffer, int width, int height);
 	uint32_t mCMD = CMD_NONE_CAMERA;
     };
 

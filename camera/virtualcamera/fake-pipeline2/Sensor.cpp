@@ -16,7 +16,7 @@
 
 //#define LOG_NDEBUG 0
 //#define LOG_NNDEBUG 0
-#define LOG_TAG "Sensor:"
+#define LOG_TAG "sensor"
 
 #ifdef LOG_NNDEBUG
 #define ALOGVV(...) ALOGV(__VA_ARGS__)
@@ -32,10 +32,9 @@
 #include "../VirtualBuffer.h"
 #include "../VirtualFakeCamera2.h"
 #include "system/camera_metadata.h"
+#include "GrallocModule.h"
 
-#define MAX(a, b) ((a > b) ? a : b)
-#define MIN(a, b) ((a < b) ? a : b)
-#define CLAP(a) (MAX((MIN(a, 0xff)), 0x00))
+
 #define DUMP_RGBA(dump_index, p_addr1, len1)                               \
   ({                                                                       \
     size_t rc = 0;                                                         \
@@ -130,11 +129,20 @@ Sensor::Sensor(uint32_t width, uint32_t height)
 Sensor::~Sensor() { shutDown(); }
 
 status_t Sensor::startUp() {
-  ALOGV("%s: E", __FUNCTION__);
+  ALOGVV(LOG_TAG "%s: E", __FUNCTION__);
 
   int res;
   mCapturedBuffers = NULL;
-  res = run("VirtualFakeCamera2::Sensor", ANDROID_PRIORITY_URGENT_DISPLAY);
+
+  const hw_module_t *module = nullptr;
+  int ret = hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module);
+  if (ret) {
+     ALOGE(LOG_TAG "%s: Failed to get gralloc module: %d", __FUNCTION__, ret);
+  }
+  m_major_version = (module->module_api_version >> 8) & 0xff;
+  ALOGVV(LOG_TAG " m_major_version[%d]", m_major_version);
+
+  res = run("Sensor", ANDROID_PRIORITY_URGENT_DISPLAY);
 
   if (res != OK) {
     ALOGE("Unable to start up sensor capture thread: %d", res);
@@ -596,36 +604,47 @@ void Sensor::saveNV21(uint8_t *img, uint32_t size) {
 
 void Sensor::captureNV21(uint8_t *img, uint32_t gain, uint32_t width,
                          uint32_t height) {
-  ALOGVV("%s", __FUNCTION__);
+  ALOGVV(LOG_TAG " %s", __FUNCTION__);
 
   ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
 
   uint8_t *bufData = handle->clientBuf[handle->clientRevCount % 1].buffer;
   
-  ALOGVV("%s: Total Frame recv vs Total Renderred [%d:%d] bufData[%p] img[%p]",
+  ALOGVV(LOG_TAG "%s: Total Frame recv vs Total Renderred [%d:%d] bufData[%p] img[%p]",
          __func__, handle->clientRevCount, handle->clientUsedCount, bufData, img);
 
   width = 640;
   height = 480;
-  // Code to convert i420 to NV21
-  uint32_t ySize = width * height;
-  uint32_t totalSize = width * height * 3 / 2;
-  uint32_t i420UIndex = ySize;
-  uint32_t i420VIndex = ySize * 5 / 4;
-  // Copy y
-  memcpy(img, bufData, ySize);
-  // Duplicate uv
-  for (uint32_t uvIndex = ySize; uvIndex < totalSize; uvIndex += 2) {
-    *(img + uvIndex + 1) = *(bufData + i420UIndex++);
-    *(img + uvIndex) = *(bufData + i420VIndex++);
+
+  uint8_t *pTempY = bufData;
+  uint8_t *pTempU = bufData + width*height;
+  uint8_t *pTempV = bufData + width*height + (width*height)/4;
+
+  uint8_t *dst_vu = img + width*height;
+  if (m_major_version == 1) {
+	ALOGVV(LOG_TAG " %s: convert I420 to NV12!", __FUNCTION__);
+	if (int ret = libyuv::I420ToNV12(pTempY, width,
+				pTempU, width >> 1,
+				pTempV, width >> 1,
+				img, width,
+				dst_vu, width,
+				width, height)) {}
+  } else {
+	ALOGVV(LOG_TAG " %s: convert I420 to NV21!", __FUNCTION__);
+	if (int ret = libyuv::I420ToNV21(pTempY, width,
+				pTempU, width >> 1,
+				pTempV, width >> 1,
+				img, width,
+				dst_vu, width,
+				width, height)) {}
   }
 
   // capture try end
-  ALOGV("NV21 sensor image captured");
+  ALOGV(LOG_TAG "NV21 sensor image captured");
   if (debug_picture_take) {
     saveNV21(img, width * height * 3);
   }
-  ALOGVV(LOG_TAG "%s: X", __FUNCTION__);
+  ALOGVV(LOG_TAG " %s: X", __FUNCTION__);
 }
 
 void Sensor::captureDepth(uint8_t *img, uint32_t gain, uint32_t width,

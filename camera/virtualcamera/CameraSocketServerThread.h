@@ -37,6 +37,7 @@ class CameraSocketServerThread : public Thread {
   virtual void requestExit();
   virtual status_t requestExitAndWait();
   int getClientFd();
+  void clearBuffer(char * fbuffer, int width, int height);
 
  private:
   virtual status_t readyToRun();

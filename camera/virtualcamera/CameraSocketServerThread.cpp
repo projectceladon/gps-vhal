@@ -40,6 +40,8 @@
 #include "CameraSocketServerThread.h"
 #include "VirtualBuffer.h"
 #include "VirtualCameraFactory.h"
+
+
 #define DUMP_FROM_LAPTOP_TO_SERVER(filename, p_addr1, len1, p_addr2, len2) \
   ({                                                                       \
     size_t rc = 0;                                                         \
@@ -119,6 +121,15 @@ status_t CameraSocketServerThread::readyToRun() {
   return OK;
 }
 
+void CameraSocketServerThread::clearBuffer(char * fbuffer, int width, int height){
+
+   ALOGVV(LOG_TAG " %s Enter", __FUNCTION__);
+   char *uv_offset = fbuffer + width * height;
+   memset(fbuffer, 0x10, (width*height));
+   memset(uv_offset, 0x80, (width*height)/2);
+   ALOGVV(LOG_TAG " %s: Exit", __FUNCTION__);
+}
+
 bool CameraSocketServerThread::threadLoop() {
   int ret = 0;
   int newClientFd = -1;
@@ -131,7 +142,7 @@ bool CameraSocketServerThread::threadLoop() {
                  strcmp(getenv("CAM_SOCK_TYPE"), "ip") == 0)
                     ? true
                     : false;
-  ALOGI("%s: Constructing camera socket server with socket type %s...",
+  ALOGW(LOG_TAG " %s: Constructing camera socket server with socket type [%s]",
         __FUNCTION__, getenv("CAM_SOCK_TYPE"));
   if (!mSocktypeIP) {
     mSocketServerFd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -145,23 +156,23 @@ bool CameraSocketServerThread::threadLoop() {
     addr_un.sun_family = AF_UNIX;
     strncpy(&addr_un.sun_path[0], mSocketServerFile, strlen(mSocketServerFile));
     if ((access(mSocketServerFile, F_OK)) != -1) {
-      ALOGW("%s camera socket server file is %s", __FUNCTION__,
+      ALOGI(LOG_TAG " %s camera socket server file is %s", __FUNCTION__,
             mSocketServerFile);
       ret = unlink(mSocketServerFile);
       if (ret < 0) {
-        ALOGW("%s Failed to unlink %s address %d, %s", __FUNCTION__,
+        ALOGE(LOG_TAG " %s Failed to unlink %s address %d, %s", __FUNCTION__,
               mSocketServerFile, ret, strerror(errno));
         return false;
       }
     } else {
-      ALOGW("%s camera socket server file %s will created. ", __FUNCTION__,
+      ALOGV(LOG_TAG " %s camera socket server file %s will created. ", __FUNCTION__,
             mSocketServerFile);
     }
 
     ret = bind(mSocketServerFd, (struct sockaddr *)&addr_un,
                sizeof(sa_family_t) + strlen(mSocketServerFile) + 1);
     if (ret < 0) {
-      ALOGE("%s Failed to bind %s address %d, %s", __FUNCTION__,
+      ALOGE(LOG_TAG " %s Failed to bind %s address %d, %s", __FUNCTION__,
             mSocketServerFile, ret, strerror(errno));
       return false;
     }
@@ -176,13 +187,13 @@ bool CameraSocketServerThread::threadLoop() {
   } else {
     mSocketServerFd = socket(AF_INET, SOCK_STREAM, 0);
     if (mSocketServerFd < 0) {
-      ALOGE("%s:%d Fail to construct camera socket with error: %s",
+      ALOGE(LOG_TAG " %s:Line:[%d] Fail to construct camera socket with error: [%s]",
             __FUNCTION__, __LINE__, strerror(errno));
       return false;
     }
     if (setsockopt(mSocketServerFd, SOL_SOCKET, SO_REUSEADDR, &so_reuseaddr,
                    sizeof(int)) < 0) {
-      ALOGE(LOG_TAG "%s setsockopt(SO_REUSEADDR) failed. : %d\n", __func__,
+      ALOGE(LOG_TAG " %s setsockopt(SO_REUSEADDR) failed. : %d\n", __func__,
             mSocketServerFd);
       return false;
     }
@@ -194,7 +205,7 @@ bool CameraSocketServerThread::threadLoop() {
     ret = bind(mSocketServerFd, (struct sockaddr *)&addr_ip,
                sizeof(struct sockaddr_in));
     if (ret < 0) {
-      ALOGE("%s Failed to bind port(%d). ret: %d, %s", __func__, port, ret,
+      ALOGE(LOG_TAG " %s Failed to bind port(%d). ret: %d, %s", __func__, port, ret,
             strerror(errno));
       return false;
     }
@@ -206,7 +217,17 @@ bool CameraSocketServerThread::threadLoop() {
   }
 
   while (mRunning) {
-    ALOGE("%s: Wait for camera client to connect...", __FUNCTION__);
+    ALOGW(LOG_TAG " %s: Wait for camera client to connect. . .", __FUNCTION__);
+
+    ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
+    char *fbuffer =
+          (char *)handle->clientBuf[handle->clientRevCount % 1].buffer;
+
+    clearBuffer(fbuffer, 640, 480);
+
+    ALOGVV(LOG_TAG " %s: clearing buffer[%d]",
+	__FUNCTION__, handle->clientRevCount);
+
     if (mSocktypeIP) {
       socklen_t alen = sizeof(struct sockaddr_in);
       newClientFd = accept(mSocketServerFd, (struct sockaddr *)&addr_ip, &alen);
@@ -214,14 +235,16 @@ bool CameraSocketServerThread::threadLoop() {
       socklen_t alen = sizeof(struct sockaddr_un);
       newClientFd = accept(mSocketServerFd, (struct sockaddr *)&addr_un, &alen);
     }
-    ALOGE("%s: Accepted client connect... %d", __FUNCTION__, newClientFd);
+
+    ALOGW(LOG_TAG " %s: Accepted client: [%d]", __FUNCTION__, newClientFd);
     if (newClientFd < 0) {
-      ALOGE("%s: Fail to accept client. Error: %s", __FUNCTION__,
+      ALOGE(LOG_TAG " %s: Fail to accept client. Error: [%s]", __FUNCTION__,
             strerror(errno));
       continue;
     }
-    mClientFd = newClientFd;
 
+    mClientFd = newClientFd;
+    ALOGW(LOG_TAG " %s: Waiting from data from client... [%d]", __FUNCTION__, newClientFd);
     gVirtualCameraFactory.setSocketFd(mClientFd);
 
     int size = 0;
@@ -230,21 +253,19 @@ bool CameraSocketServerThread::threadLoop() {
     int ret;
     int event;
 
-    ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
-
     fd.fd = mClientFd;  // your socket handler
     fd.events = POLLIN | POLLHUP;
 
     while (true) {
       char *fbuffer =
           (char *)handle->clientBuf[handle->clientRevCount % 1].buffer;
-      char *uv_add = (char *)(fbuffer + 307200 + 1);
+
       if (mSocktypeIP) {
         if ((size = recv(mClientFd, (char *)fbuffer, 460800, MSG_WAITALL)) >
             0) {
           handle->clientRevCount++;
           ALOGVV(LOG_TAG
-                 "%s: Pocket rev %d and "
+                 " %s: Pocket rev %d and "
                  "size %d",
                  __FUNCTION__, handle->clientRevCount, size);
         } else {
@@ -253,6 +274,10 @@ bool CameraSocketServerThread::threadLoop() {
           close(mClientFd);
           mClientFd = -1;
           gVirtualCameraFactory.setSocketFd(mClientFd);
+	  char *fbuffer =
+		(char *)handle->clientBuf[handle->clientRevCount % 1].buffer;
+	  ALOGW(LOG_TAG " %s: clearing buffer[%d]", __FUNCTION__, handle->clientRevCount);
+	  clearBuffer(fbuffer, 640, 480);
           break;
         }
       } else {
@@ -270,19 +295,24 @@ bool CameraSocketServerThread::threadLoop() {
         event = fd.revents;  // returned events
 
         if (event & POLLHUP) {  // connnection disconnected
-          ALOGE("%s: POLLHUP: Close camera socket connection", __FUNCTION__);
+          ALOGE(LOG_TAG " %s: POLLHUP: Close camera socket connection", __FUNCTION__);
+          shutdown(mClientFd, SHUT_RDWR);
           close(mClientFd);
           mClientFd = -1;
           gVirtualCameraFactory.setSocketFd(mClientFd);
+	  char *fbuffer =
+		(char *)handle->clientBuf[handle->clientRevCount % 1].buffer;
+	  ALOGW(LOG_TAG " %s: clearing buffer[%d]", __FUNCTION__, handle->clientRevCount);
+	  clearBuffer(fbuffer, 640, 480);
           break;
         } else if (event & POLLIN) {  // preview / record
           if ((size = recv(mClientFd, (char *)fbuffer, 460800, MSG_WAITALL)) >
               0) {
             handle->clientRevCount++;
-            ALOGVV(
-                "%s: Pocket rev %d and "
-                "size %d",
-                __FUNCTION__, handle->clientRevCount, size);
+            ALOGVV(LOG_TAG
+                " %s: Pocket rev %d and "
+                "size %d fbuffer[%p]",
+                __FUNCTION__, handle->clientRevCount, size, fbuffer);
           }
         } else {
           //	ALOGE("%s: continue polling..", __FUNCTION__);
@@ -290,7 +320,7 @@ bool CameraSocketServerThread::threadLoop() {
       }
     }
   }
-  ALOGE("%s: Quit CameraSocketServerThread... %s(%d)", __FUNCTION__,
+  ALOGE(" %s: Quit CameraSocketServerThread... %s(%d)", __FUNCTION__,
         mSocketServerFile, mClientFd);
   close(mClientFd);
   mClientFd = -1;

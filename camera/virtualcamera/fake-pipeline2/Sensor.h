@@ -244,6 +244,7 @@ namespace android
         void captureDepthCloud(uint8_t *img);
         void saveNV21(uint8_t *img, uint32_t size);
         bool debug_picture_take = false;
+	uint8_t m_major_version;
     };
 
 } // namespace android
