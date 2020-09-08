@@ -245,7 +245,8 @@ namespace android
         void saveNV21(uint8_t *img, uint32_t size);
         bool debug_picture_take = false;
 	uint8_t m_major_version;
-	uint32_t destFrameSize;
+	uint32_t destTempSize;
+	uint8_t *destTemp = NULL;
     };
 
 } // namespace android
