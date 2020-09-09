@@ -326,9 +326,9 @@ status_t VirtualFakeCamera3::configureStreams(
       return BAD_VALUE;
     }
 
-    ALOGV(
-        "%s: Stream %p (id %zu), type %d, usage 0x%x, format 0x%x "
-        "width 0x%x, height 0x%x",
+    ALOGVV(
+        " %s: Stream %p (id %zu), type %d, usage 0x%x, format 0x%x "
+        "width %d, height %d",
         __FUNCTION__, newStream, i, newStream->stream_type, newStream->usage,
         newStream->format, newStream->width, newStream->height);
 
@@ -1037,7 +1037,7 @@ status_t VirtualFakeCamera3::processCaptureRequest(
         ALOGE("%s: Request %d: Buffer %zu: Unable to lock buffer", __FUNCTION__,
               frameNumber, i);
       } else {
-        ALOGVV("%s, stream format 0x%x width %d height %d buffer 0x%p img 0x%p",
+        ALOGVV(" %s, stream format 0x%x width %d height %d buffer 0x%p img 0x%p",
                __FUNCTION__, destBuf.format, destBuf.width, destBuf.height,
                destBuf.buffer, destBuf.img);
       }
@@ -2343,7 +2343,7 @@ status_t VirtualFakeCamera3::doFakeAF(CameraMetadata &settings) {
       // Cancel trigger always transitions into INACTIVE
       mAfState = ANDROID_CONTROL_AF_STATE_INACTIVE;
 
-      ALOGV("%s: AF State transition to STATE_INACTIVE", __FUNCTION__);
+      ALOGVV("%s: AF State transition to STATE_INACTIVE", __FUNCTION__);
 
       // Stay in 'inactive' until at least next frame
       return OK;

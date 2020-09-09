@@ -244,7 +244,17 @@ namespace android
         void captureDepthCloud(uint8_t *img);
         void saveNV21(uint8_t *img, uint32_t size);
         bool debug_picture_take = false;
+	// m_major_version 0: CPU 1: SG1
 	uint8_t m_major_version;
+	// destTempSize temp memory for preview for preview usecase
+	uint32_t destTempSize;
+	uint8_t *destTemp = NULL;
+	// dstTempSize temp memory for preview for capture/record usecase
+	uint32_t dstTempSize;
+	uint8_t *dstTemp = NULL;
+	// vHAL buffer
+	int srcWidth = 640;
+	int srcHeight = 480;
     };
 
 } // namespace android
