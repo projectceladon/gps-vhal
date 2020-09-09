@@ -247,6 +247,8 @@ namespace android
 	uint8_t m_major_version;
 	uint32_t destTempSize;
 	uint8_t *destTemp = NULL;
+	uint32_t dstTempSize;
+	uint8_t *dstTemp = NULL;
     };
 
 } // namespace android
