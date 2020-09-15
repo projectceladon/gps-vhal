@@ -949,10 +949,6 @@ status_t VirtualFakeCamera3::processCaptureRequest(
   sensitivity =
       (entry.count > 0) ? entry.data.i32[0] : Sensor::kSensitivityRange[0];
 
-  if (exposureTime > frameDuration) {
-    frameDuration = exposureTime + Sensor::kMinVerticalBlank;
-    settings.update(ANDROID_SENSOR_FRAME_DURATION, &frameDuration, 1);
-  }
 
   Buffers *sensorBuffers = new Buffers();
   HalBufferVector *buffers = new HalBufferVector();
