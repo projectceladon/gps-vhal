@@ -452,84 +452,26 @@ void Sensor::captureRaw(uint8_t *img, uint32_t gain, uint32_t stride) {
 
 void Sensor::captureRGBA(uint8_t *img, uint32_t gain, uint32_t width,
                          uint32_t height) {
-  ALOGVV(" %s: E", __FUNCTION__);
+  ALOGVV("%s: E", __FUNCTION__);
   static int i = 0;
   static int j = 0;
-//width = 640;
-//height = 480;
+  width = 640;
+  height = 480;
   ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
 
   uint8_t *bufData = handle->clientBuf[handle->clientRevCount % 1].buffer;
 
-  ALOGE("[Kaushal] %s: Total Frame recv vs Total Renderred [%d:%d] bufData[%p] img[%p]",
+  ALOGVV("%s: Total Frame recv vs Total Renderred [%d:%d] bufData[%p] img[%p]",
          __func__, handle->clientRevCount, handle->clientUsedCount, bufData, img);
   handle->clientUsedCount++;
 
-  int srcWidth = 640;
-  int srcHeight = 480;
-  int srcSize = srcWidth * srcHeight;
-  int src_y_stride = srcWidth;
-  int src_u_stride = src_y_stride/2;
-  int src_v_stride = src_y_stride/2;
-
   uint8_t *pTempY = bufData;
-  uint8_t *pTempU = bufData + srcSize;
-  uint8_t *pTempV = bufData + srcSize + srcSize/4;
-
-
-#if 0
-  if(width == 320 && height == 240){
-	destFrameSize = width * height * 1.5;
-  } else {
-	destFrameSize = 640 * 480 * 1.5;
-	//TODO: default keeping 640x 480 
+  uint8_t *pTempU = bufData + 307200;
+  uint8_t *pTempV = bufData + 384000;
+  if (int ret = libyuv::I420ToABGR(pTempY, 640, pTempU, 320, pTempV, 320, img,
+                                   640 * 4, 640, 480)) {
   }
-#endif
-
-  //uint32_t destTemp[115200] = {0};
-  uint8_t destTemp[460800] = {0};
-  int destTempSize = width * height;
-  uint8_t* pDstY = destTemp;
-  uint8_t* pDstU = (destTemp + destTempSize);
-  uint8_t* pDstV = (destTemp + destTempSize + destTempSize/4);
-
-
-  if (width == (uint32_t)srcWidth && height == (uint32_t)srcHeight) {
-  	ALOGE("[Kaushal] %s: Not scaling dstWidth: %d dstHeight: %d",
-		__FUNCTION__, width, height);
-
-  	if (int ret = libyuv::I420ToABGR(pTempY, srcWidth,
-				pTempU, srcWidth>>1,
-				pTempV, srcWidth>>1,
-				img, width * 4,
-				width, height)) {}
-  } else {
-  	ALOGE("[Kaushal] %s: Scaling dstWidth: %d dstHeight: %d",
-		__FUNCTION__, width, height);
-
-  	if(int ret = libyuv::I420Scale(pTempY, src_y_stride,
-                     pTempU, src_u_stride,
-                     pTempV, src_v_stride,
-                     srcWidth, srcHeight,
-                     pDstY, width,
-                     pDstU, width>>1,
-                     pDstV, width>>1,
-                     width, height,
-                     libyuv::kFilterNone)){}
-
-  	ALOGE("[Kaushal] %s: Scaling done!",
-		__FUNCTION__);
-
-	if (int ret = libyuv::I420ToABGR(pDstY, width,
-                                pDstU, width>>1,
-                                pDstV, width>>1,
-                                img, width * 4,
-                                width, height)) {}
-
-  }
-
-
-  ALOGE("[Kaushal] %s: Done with converion into img[%p]", __FUNCTION__, img);
+  ALOGVV("%s: Done with converion into img[%p]", __FUNCTION__, img);
 
 #if 0
       if(j<300){
@@ -601,7 +543,7 @@ void Sensor::captureRGBA(uint8_t *img, uint32_t gain, uint32_t width,
     pD2 += 4 * width;
   }
 #endif
-  ALOGVV(" %s: X", __FUNCTION__);
+  ALOGVV("%s: X", __FUNCTION__);
 }
 
 void Sensor::captureRGB(uint8_t *img, uint32_t gain, uint32_t width,
