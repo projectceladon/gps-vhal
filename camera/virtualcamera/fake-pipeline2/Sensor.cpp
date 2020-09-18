@@ -126,13 +126,7 @@ Sensor::Sensor(uint32_t width, uint32_t height)
   // height);
 }
 
-Sensor::~Sensor() { 
-	if(destTemp) {
-		ALOGE("[Kaushal] freeing destTemp..%s", __FUNCTION__);
-		free(destTemp);
-	}
-	shutDown(); 
-}
+Sensor::~Sensor() { shutDown(); }
 
 status_t Sensor::startUp() {
   ALOGVV(LOG_TAG "%s: E", __FUNCTION__);
@@ -483,30 +477,24 @@ void Sensor::captureRGBA(uint8_t *img, uint32_t gain, uint32_t width,
   uint8_t *pTempV = bufData + srcSize + srcSize/4;
 
 
+#if 0
   if(width == 320 && height == 240){
-	destTempSize = 320 * 240 * 1.5;
-  } else if(width == 640 && height == 480) {
-	destTempSize = 640 * 480 * 1.5;
+	destFrameSize = width * height * 1.5;
   } else {
-	destTempSize = 640 * 480 * 1.5;
+	destFrameSize = 640 * 480 * 1.5;
 	//TODO: default keeping 640x 480 
   }
-
-  if(destTemp == NULL){
-	ALOGE("[Kaushal] %s allocate destTemp of %d bytes", __FUNCTION__, destTempSize);
-	destTemp = (uint8_t *)malloc(destTempSize);
-  }
+#endif
 
   //uint32_t destTemp[115200] = {0};
-  //uint8_t destTemp[460800] = {0};
-  //int destTempSize = width * height;
+  uint8_t destTemp[460800] = {0};
+  int destTempSize = width * height;
   uint8_t* pDstY = destTemp;
   uint8_t* pDstU = (destTemp + destTempSize);
   uint8_t* pDstV = (destTemp + destTempSize + destTempSize/4);
 
 
-//  if (width == (uint32_t)srcWidth && height == (uint32_t)srcHeight) {
-  if(0) {
+  if (width == (uint32_t)srcWidth && height == (uint32_t)srcHeight) {
   	ALOGE("[Kaushal] %s: Not scaling dstWidth: %d dstHeight: %d",
 		__FUNCTION__, width, height);
 
