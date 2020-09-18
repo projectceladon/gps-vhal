@@ -131,10 +131,6 @@ Sensor::~Sensor() {
 		ALOGE("[Kaushal] freeing destTemp..%s", __FUNCTION__);
 		free(destTemp);
 	}
-	if(dstTemp) {
-		ALOGE("[Kaushal] freeing dstTemp..%s", __FUNCTION__);
-		free(dstTemp);
-	}
 	shutDown(); 
 }
 
@@ -465,12 +461,14 @@ void Sensor::captureRGBA(uint8_t *img, uint32_t gain, uint32_t width,
   ALOGVV(" %s: E", __FUNCTION__);
   static int i = 0;
   static int j = 0;
+//width = 640;
+//height = 480;
   ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
 
   uint8_t *bufData = handle->clientBuf[handle->clientRevCount % 1].buffer;
 
-  ALOGVV("%s: Total Frame recv vs Total Renderred [%d:%d] bufData[%p] img[%p] w:h[%d:%d]",
-         __func__, handle->clientRevCount, handle->clientUsedCount, bufData, img, width, height);
+  ALOGE("[Kaushal] %s: Total Frame recv vs Total Renderred [%d:%d] bufData[%p] img[%p]",
+         __func__, handle->clientRevCount, handle->clientUsedCount, bufData, img);
   handle->clientUsedCount++;
 
   int srcWidth = 640;
@@ -491,11 +489,25 @@ void Sensor::captureRGBA(uint8_t *img, uint32_t gain, uint32_t width,
 	destTempSize = 640 * 480 * 1.5;
   } else {
 	destTempSize = 640 * 480 * 1.5;
-	//TODO: default keeping 640x480 
+	//TODO: default keeping 640x 480 
   }
 
-  if (width == (uint32_t)srcWidth && height == (uint32_t)srcHeight) {
-	ALOGE("[Kaushal] %s: Not scaling dstWidth: %d dstHeight: %d",
+  if(destTemp == NULL){
+	ALOGE("[Kaushal] %s allocate destTemp of %d bytes", __FUNCTION__, destTempSize);
+	destTemp = (uint8_t *)malloc(destTempSize);
+  }
+
+  //uint32_t destTemp[115200] = {0};
+  //uint8_t destTemp[460800] = {0};
+  //int destTempSize = width * height;
+  uint8_t* pDstY = destTemp;
+  uint8_t* pDstU = (destTemp + destTempSize);
+  uint8_t* pDstV = (destTemp + destTempSize + destTempSize/4);
+
+
+//  if (width == (uint32_t)srcWidth && height == (uint32_t)srcHeight) {
+  if(0) {
+  	ALOGE("[Kaushal] %s: Not scaling dstWidth: %d dstHeight: %d",
 		__FUNCTION__, width, height);
 
   	if (int ret = libyuv::I420ToABGR(pTempY, srcWidth,
@@ -506,16 +518,6 @@ void Sensor::captureRGBA(uint8_t *img, uint32_t gain, uint32_t width,
   } else {
   	ALOGE("[Kaushal] %s: Scaling dstWidth: %d dstHeight: %d",
 		__FUNCTION__, width, height);
-
-  	if(destTemp == NULL){
-		ALOGVV("[Kaushal] %s allocate destTemp of %d bytes", __FUNCTION__, destTempSize);
-		destTemp = (uint8_t *)malloc(destTempSize);
-  	}
-
-	int destFrameSize = width * height;
-	uint8_t* pDstY = destTemp;
-	uint8_t* pDstU = (destTemp + destFrameSize);
-	uint8_t* pDstV = (destTemp + destFrameSize + destFrameSize/4);
 
   	if(int ret = libyuv::I420Scale(pTempY, src_y_stride,
                      pTempU, src_u_stride,
@@ -538,7 +540,8 @@ void Sensor::captureRGBA(uint8_t *img, uint32_t gain, uint32_t width,
 
   }
 
-  ALOGVV("[Kaushal] %s: Done with converion into img[%p]", __FUNCTION__, img);
+
+  ALOGE("[Kaushal] %s: Done with converion into img[%p]", __FUNCTION__, img);
 
 #if 0
       if(j<300){
@@ -671,104 +674,41 @@ void Sensor::saveNV21(uint8_t *img, uint32_t size) {
 
 void Sensor::captureNV21(uint8_t *img, uint32_t gain, uint32_t width,
                          uint32_t height) {
-  ALOGE(LOG_TAG "[Kaushal] %s", __FUNCTION__);
+  ALOGVV(LOG_TAG " %s", __FUNCTION__);
 
   ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
 
   uint8_t *bufData = handle->clientBuf[handle->clientRevCount % 1].buffer;
   
-  ALOGE(LOG_TAG "[Kaushal] %s: Total Frame recv vs Total Renderred [%d:%d] bufData[%p] img[%p] w:h[%d:%d]",
-         __func__, handle->clientRevCount, handle->clientUsedCount, bufData, img, width, height);
+  ALOGVV(LOG_TAG "%s: Total Frame recv vs Total Renderred [%d:%d] bufData[%p] img[%p]",
+         __func__, handle->clientRevCount, handle->clientUsedCount, bufData, img);
 
-  int srcWidth = 640;
-  int srcHeight = 480;
-  int srcSize = srcWidth * srcHeight;
-  int src_y_stride = srcWidth;
-  int src_u_stride = src_y_stride/2;
-  int src_v_stride = src_y_stride/2;
+  width = 640;
+  height = 480;
 
   uint8_t *pTempY = bufData;
-  uint8_t *pTempU = bufData + srcSize;
-  uint8_t *pTempV = bufData + srcSize + srcSize/4;
+  uint8_t *pTempU = bufData + width*height;
+  uint8_t *pTempV = bufData + width*height + (width*height)/4;
 
-  uint8_t *dst_vu = img + srcWidth*srcHeight;
-
-  if(width == 320 && height == 240){
-        dstTempSize = 320 * 240 * 1.5;
-  } else if(width == 640 && height == 480) {
-        dstTempSize = 640 * 480 * 1.5;
+  uint8_t *dst_vu = img + width*height;
+  if (m_major_version == 1) {
+	ALOGVV(LOG_TAG " %s: convert I420 to NV12!", __FUNCTION__);
+	if (int ret = libyuv::I420ToNV12(pTempY, width,
+				pTempU, width >> 1,
+				pTempV, width >> 1,
+				img, width,
+				dst_vu, width,
+				width, height)) {}
   } else {
-        dstTempSize = 640 * 480 * 1.5;
-        //TODO: default keeping 640x480
+	ALOGVV(LOG_TAG " %s: convert I420 to NV21!", __FUNCTION__);
+	if (int ret = libyuv::I420ToNV21(pTempY, width,
+				pTempU, width >> 1,
+				pTempV, width >> 1,
+				img, width,
+				dst_vu, width,
+				width, height)) {}
   }
 
-  if (width == (uint32_t)srcWidth && height == (uint32_t)srcHeight) {
-        ALOGE("[Kaushal] %s: Not scaling dstWidth: %d dstHeight: %d",
-                __FUNCTION__, width, height);
-  	if (m_major_version == 1) {
-		ALOGVV(LOG_TAG " %s: convert I420 to NV12!", __FUNCTION__);
-		if (int ret = libyuv::I420ToNV12(pTempY, srcWidth,
-					pTempU, srcWidth >> 1,
-					pTempV, srcWidth >> 1,
-					img, width,
-					dst_vu, width,
-					width, height)) {}
-	  } else {
-		ALOGVV(LOG_TAG "[Kaushal] %s: convert I420 to NV21!", __FUNCTION__);
-		if (int ret = libyuv::I420ToNV21(pTempY, srcWidth,
-					pTempU, srcWidth >> 1,
-					pTempV, srcWidth >> 1,
-					img, width,
-					dst_vu, width,
-					width, height)) {}
-  	}
-  } else {
-        ALOGE("[Kaushal] %s: Scaling dstWidth: %d dstHeight: %d",
-                __FUNCTION__, width, height);
-	if(dstTemp == NULL){
-                ALOGE("[Kaushal] %s allocate dstTemp of %d bytes", __FUNCTION__, dstTempSize);
-                dstTemp = (uint8_t *)malloc(dstTempSize);
-        }
-
-        int dstFrameSize = width * height;
-        uint8_t* pDstY = dstTemp;
-        uint8_t* pDstU = (dstTemp + dstFrameSize);
-        uint8_t* pDstV = (dstTemp + dstFrameSize + dstFrameSize/4);
-
-  	uint8_t *temp_dst_vu = img + width*height;
-
-        if(int ret = libyuv::I420Scale(pTempY, src_y_stride,
-                     pTempU, src_u_stride,
-                     pTempV, src_v_stride,
-                     srcWidth, srcHeight,
-                     pDstY, width,
-                     pDstU, width>>1,
-                     pDstV, width>>1,
-                     width, height,
-                     libyuv::kFilterNone)){}
-
-        ALOGVV("[Kaushal] %s: Scaling done!",
-                __FUNCTION__);
-
-	if (m_major_version == 1) {
-                ALOGVV(LOG_TAG " %s: convert I420 to NV12!", __FUNCTION__);
-                if (int ret = libyuv::I420ToNV12(pDstY, width,
-                                        pDstU, width >> 1,
-                                        pDstV, width >> 1,
-                                        img, width,
-                                        temp_dst_vu, width,
-                                        width, height)) {}
-          } else {
-                ALOGVV(LOG_TAG " %s: convert I420 to NV21!", __FUNCTION__);
-                if (int ret = libyuv::I420ToNV21(pDstY, width,
-                                        pDstU, width >> 1,
-                                        pDstV, width >> 1,
-                                        img, width,
-                                        temp_dst_vu, width,
-                                        width, height)) {}
-
-  	  }
-   }
   // capture try end
   ALOGV(LOG_TAG "NV21 sensor image captured");
   if (debug_picture_take) {

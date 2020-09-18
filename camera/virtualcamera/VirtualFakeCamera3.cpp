@@ -326,9 +326,9 @@ status_t VirtualFakeCamera3::configureStreams(
       return BAD_VALUE;
     }
 
-    ALOGVV(
-        "Kaushal: %s: Stream %p (id %zu), type %d, usage 0x%x, format 0x%x "
-        "width %d, height %d",
+    ALOGV(
+        "%s: Stream %p (id %zu), type %d, usage 0x%x, format 0x%x "
+        "width 0x%x, height 0x%x",
         __FUNCTION__, newStream, i, newStream->stream_type, newStream->usage,
         newStream->format, newStream->width, newStream->height);
 
@@ -1037,7 +1037,7 @@ status_t VirtualFakeCamera3::processCaptureRequest(
         ALOGE("%s: Request %d: Buffer %zu: Unable to lock buffer", __FUNCTION__,
               frameNumber, i);
       } else {
-        ALOGE("[Kaushal] %s, stream format 0x%x width %d height %d buffer 0x%p img 0x%p",
+        ALOGVV("%s, stream format 0x%x width %d height %d buffer 0x%p img 0x%p",
                __FUNCTION__, destBuf.format, destBuf.width, destBuf.height,
                destBuf.buffer, destBuf.img);
       }
