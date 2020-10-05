@@ -289,6 +289,8 @@ namespace android
         }
         cameraId = trySwitchRemoteCamera(cameraId);
 
+	//Save global cameraId
+	gVirtualCameraFactory.setmCameraId(cameraId);
         return mVirtualCameras[cameraId]->connectCamera(device);
     }
 

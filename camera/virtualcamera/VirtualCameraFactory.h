@@ -177,7 +177,36 @@ namespace android
         {
             return mVirtualCameraNum;
         }
-        
+       
+	int getmCameraId(){
+     	    return mCameraId;
+	}
+
+	void setmCameraId(int cameraID){
+		mCameraId = cameraID;
+	}
+
+	int getmWidth(){
+		return mWidth;
+	}
+	
+	void setmWidth(int width){
+		mWidth = width;
+	}
+	
+	int getmHeight(){
+		return mHeight;
+	}
+	
+	void setmHeight(int height){
+		mHeight = height;
+	}
+
+	
+	int calulateI420FrameSize(){
+		return getmHeight() * getmWidth() * 3/2; //I420 frame
+	}
+
 	int getSocketFd() 
         {
             return mSocketFdHandle;
@@ -293,6 +322,14 @@ namespace android
 
 	//flag to know weather client closed
 	bool mClientAvailable = true;
+
+
+	//mCameraId global camera Id
+	int mCameraId;
+	//mWidth width which will come in frame request
+	int mWidth;
+	//mHeight which will come in frame request
+	int mHeight;
 
         // Flags whether or not constructor has succeeded.
         bool mConstructedOK;

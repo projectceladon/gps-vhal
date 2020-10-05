@@ -1,7 +1,10 @@
 #ifndef HW_EMULATOR_CAMERA_VIRTUALD_CAMERA_FACTORY_H_K
 #define HW_EMULATOR_CAMERA_VIRTUALD_CAMERA_FACTORY_H_K
 
-#define MAX_CLIENT_BUF 8
+#include "VirtualCameraFactory.h"
+#define FRAME_240P 320 * 240 * 1.5
+#define FRAME_480P 640 * 480 * 1.5
+#define FRAME_720P 1280 * 720 * 1.5
 namespace android
 {
 
@@ -43,7 +46,14 @@ class ClientVideoBuffer {
 
         ClientVideoBuffer() {
 	    for(int i = 0; i < 1; i++) {
-                clientBuf[i].buffer = (uint8_t *)malloc(460800);
+		if(gVirtualCameraFactory.getmWidth() == 640 && gVirtualCameraFactory.getmHeight() == 480)
+                	clientBuf[i].buffer = (uint8_t *)malloc(FRAME_480P);
+		else if(gVirtualCameraFactory.getmWidth() == 320 && gVirtualCameraFactory.getmHeight() == 240)
+			clientBuf[i].buffer = (uint8_t *)malloc(FRAME_240P);
+		else if(gVirtualCameraFactory.getmWidth() == 1280 && gVirtualCameraFactory.getmHeight() == 720)
+			clientBuf[i].buffer = (uint8_t *)malloc(FRAME_720P);
+		else
+			clientBuf[i].buffer = (uint8_t *)malloc(FRAME_480P); //ToDo
             }
             clientRevCount = 0;
             clientUsedCount = 0;
