@@ -974,7 +974,6 @@ status_t VirtualFakeCamera3::processCaptureRequest(
 #endif
         if (srcBuf.stream->usage & GRALLOC_USAGE_HW_TEXTURE) {
           destBuf.format = HAL_PIXEL_FORMAT_RGBA_8888;
-          //	destBuf.format = HAL_PIXEL_FORMAT_YCbCr_420_888;
         } else if (srcBuf.stream->usage & GRALLOC_USAGE_HW_VIDEO_ENCODER) {
           destBuf.format = HAL_PIXEL_FORMAT_YCbCr_420_888;
         } else if ((srcBuf.stream->usage & GRALLOC_USAGE_HW_CAMERA_MASK) ==
@@ -1266,7 +1265,15 @@ status_t VirtualFakeCamera3::constructStaticInfo() {
   const int32_t activeArray[] = {0, 0, mSensorWidth, mSensorHeight};
   ADD_STATIC_ENTRY(ANDROID_SENSOR_INFO_ACTIVE_ARRAY_SIZE, activeArray, 4);
 
-  static const int32_t orientation = 0;  // Aligned with 'long edge'
+  char mode[PROPERTY_VALUE_MAX];
+  static int32_t orientation = 0;
+  if ((property_get("persist.remote.camera.orientation", mode, nullptr) > 0) && (!strcmp(mode, "portrait"))){
+	ALOGV("persist.remote.camera.orientation: portrait");
+	orientation = 270;
+  } else {
+	ALOGV("persist.remote.camera.orientation: landscape");
+	orientation = 0;
+  }
   ADD_STATIC_ENTRY(ANDROID_SENSOR_ORIENTATION, &orientation, 1);
 
   static const uint8_t timestampSource =
