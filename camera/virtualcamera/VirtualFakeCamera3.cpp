@@ -221,7 +221,7 @@ status_t VirtualFakeCamera3::closeCamera() {
 
   if (!mprocessCaptureRequestFlag) {
     ALOGE(LOG_TAG " %s: wait:..", __FUNCTION__);
-    std::this_thread::sleep_for(2000ms);
+    std::this_thread::sleep_for(2500ms);
   }
 
   mSocketfd = gVirtualCameraFactory.getSocketFd();
