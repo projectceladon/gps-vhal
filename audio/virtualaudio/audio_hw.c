@@ -15,6 +15,7 @@
  */
 
 #define LOG_TAG "audio_hw_virtual"
+#define ATRACE_TAG ATRACE_TAG_AUDIO
 // #define LOG_NDEBUG 0
 #include <errno.h>
 #include <malloc.h>
@@ -36,6 +37,7 @@
 #include <sys/stat.h>
 #include <cutils/properties.h>
 #include <cutils/sockets.h>
+#include <cutils/trace.h>
 #include <sys/system_properties.h>
 #include <pthread.h>
 
@@ -50,9 +52,9 @@
 
 enum
 {
-    CMD_OPEN = 0,
-    CMD_CLOSE = 1,
-    CMD_DATA = 2
+    CMD_OPEN = 0xA4, // Magic number
+    CMD_CLOSE = 0xA5,
+    CMD_DATA = 0xA6
 };
 
 enum
@@ -125,6 +127,9 @@ struct audio_server_socket
     int out_tcp_port;
     int oss_epoll_fd;
     struct epoll_event oss_epoll_event[1];
+    bool oss_is_sent_open_cmd;
+    pthread_mutex_t mutexlock_out;
+    int64_t oss_write_count;
 
     //Audio in socket
     struct stub_stream_in *ssi;
@@ -143,7 +148,7 @@ struct audio_server_socket
     struct epoll_event iss_epoll_event[1];
     bool iss_read_flag;
     int input_buffer_milliseconds; // INPUT_BUFFER_MILLISECONDS
-    pthread_mutex_t mutexlock;
+    pthread_mutex_t mutexlock_in;
 };
 
 static struct audio_server_socket ass;
@@ -162,19 +167,19 @@ static void sighandler(int signum)
     }
 }
 
-static int close_socket_fd(int sd)
+static int close_socket_fd(int *psd)
 {
-    if (sd > 0)
+    if (*psd > 0)
     {
-        ALOGV("Close %d", sd);
-        shutdown(sd, SHUT_RDWR);
-        close(sd);
-        sd = -1;
+        ALOGV("Close %d", *psd);
+        shutdown(*psd, SHUT_RDWR);
+        close(*psd);
+        *psd = -1;
         return 0;
     }
     else
     {
-        ALOGV("sd is %d. Do not need close anymore.", sd);
+        ALOGV("sd is %d. Do not need close anymore.", *psd);
         return 0;
     }
     return -1;
@@ -287,8 +292,8 @@ static int send_open_cmd(struct audio_server_socket *pass, int audio_type)
     int ret;
     int client_fd = -1;
     struct audio_socket_info asi;
-    asi.cmd = CMD_OPEN;
     memset(&asi, 0, sizeof(struct audio_socket_info));
+    asi.cmd = CMD_OPEN;
 
     switch (audio_type)
     {
@@ -344,7 +349,7 @@ static int send_open_cmd(struct audio_server_socket *pass, int audio_type)
     if (client_fd < 0)
     {
         ALOGW("client_fd is %d. Do not send open command to client.", client_fd);
-        return 0;
+        return -1;
     }
     do
     {
@@ -514,6 +519,12 @@ static int out_set_share_buffer(struct audio_stream_out *stream, int sharefd, ui
     return 0;
 }
 
+static void out_update_source_metadata(struct audio_stream_out *stream,
+                                       const struct source_metadata *source_metadata)
+{
+    ALOGV("update_source_metadata called. Do nothing as of now.");
+}
+
 static ssize_t out_write_to_client(struct audio_stream_out *stream, const void *buffer,
                                    size_t bytes, int timeout)
 {
@@ -548,8 +559,14 @@ static ssize_t out_write_to_client(struct audio_stream_out *stream, const void *
                         {
                             ALOGE("Failed to delete audio in file descriptor to epoll");
                         }
-                        close(ass.out_fd);
-                        ass.out_fd = -1;
+                        pthread_mutex_lock(&ass.mutexlock_out);
+                        close_socket_fd(&(ass.out_fd)); // Try to clear the cache data in socket.
+                        ass.oss_is_sent_open_cmd = 0;
+                        if (ATRACE_ENABLED())
+                        {
+                            ATRACE_INT("avh_out_client_EPOLLERR_or_EPOLLHUP", ass.oss_is_sent_open_cmd);
+                        }
+                        pthread_mutex_unlock(&ass.mutexlock_out);
                     }
                     else if ((ass.oss_epoll_event[ne].events & EPOLLOUT) != 0)
                     {
@@ -559,7 +576,15 @@ static ssize_t out_write_to_client(struct audio_stream_out *stream, const void *
                         ALOGV("%s asi.data_size: %d\n", __func__, asi.data_size);
                         do
                         {
+                            if (ATRACE_ENABLED())
+                            {
+                                ATRACE_INT("avh_CMD_DATA_count_before_write", ass.oss_write_count);
+                            }
                             result = write(ass.out_fd, &asi, sizeof(struct audio_socket_info));
+                            if (ATRACE_ENABLED())
+                            {
+                                ATRACE_INT("avh_CMD_DATA_count_after_write", ass.oss_write_count);
+                            }
                         } while (result < 0 && errno == EINTR);
                         if (result != sizeof(struct audio_socket_info))
                         {
@@ -578,7 +603,16 @@ static ssize_t out_write_to_client(struct audio_stream_out *stream, const void *
                         else
                         {
                             ALOGV("out_write_to_client: write buffer to socket.");
+                            if (ATRACE_ENABLED())
+                            {
+                                ATRACE_INT("avh_data_count_before_write", ass.oss_write_count);
+                            }
                             result = write(ass.out_fd, buffer, bytes);
+                            if (ATRACE_ENABLED())
+                            {
+                                ATRACE_INT("avh_data_count_after_write", ass.oss_write_count);
+                            }
+                            ass.oss_write_count++;
                             if (result < 0)
                             {
                                 ALOGE("out_write_to_client: Fail to write to audio out client(%d)"
@@ -649,6 +683,10 @@ static ssize_t out_write_to_client(struct audio_stream_out *stream, const void *
 static ssize_t out_write(struct audio_stream_out *stream, const void *buffer,
                          size_t bytes)
 {
+    if (ATRACE_ENABLED())
+    {
+        ATRACE_BEGIN("avh_out_write");
+    }
     ALOGV("out_write: %p, bytes: %zu", buffer, bytes);
 
     struct stub_stream_out *out = (struct stub_stream_out *)stream;
@@ -720,6 +758,10 @@ static ssize_t out_write(struct audio_stream_out *stream, const void *buffer,
     // the mixer. This is subtracted from the sleep estimate based on frames,
     // thereby accounting for drain in the alsa buffer during mixing.
     // This is a crude approximation; we don't handle underruns precisely.
+    if (ATRACE_ENABLED())
+    {
+        ATRACE_END();
+    }
     return ret;
 }
 
@@ -875,18 +917,30 @@ static void *out_socket_sever_thread(void *args)
             ALOGW("%s Currently only receive one out client. Close previous "
                   "client(%d)",
                   __func__, pass->out_fd);
-            if (send_close_cmd(pass->out_fd) < 0)
-            {
-                ALOGE("Fail to notify audio out client(%d) to close.", pass->out_fd);
-            }
+
             if (pass->out_fd > 0)
             {
+                pthread_mutex_lock(&ass.mutexlock_out);
+                if (ATRACE_ENABLED())
+                {
+                    ATRACE_INT("avh_osst_before_send_close_cmd", pass->oss_is_sent_open_cmd);
+                }
+                pass->oss_is_sent_open_cmd = 0;
+                if (send_close_cmd(pass->out_fd) < 0)
+                {
+                    ALOGE("Fail to notify audio out client(%d) to close.", pass->out_fd);
+                }
+                if (ATRACE_ENABLED())
+                {
+                    ATRACE_INT("avh_osst_after_send_close_cmd", pass->oss_is_sent_open_cmd);
+                }
+                pthread_mutex_unlock(&ass.mutexlock_out);
+
                 if (epoll_ctl(pass->oss_epoll_fd, EPOLL_CTL_DEL, pass->out_fd, NULL))
                 {
                     ALOGE("Failed to delete audio out file descriptor to epoll");
                 }
-                close(pass->out_fd);
-                pass->out_fd = -1;
+                close_socket_fd(&(pass->out_fd));
                 pass->out_share_fd = -1;
                 pass->out_share_buffer_size = 0;
             }
@@ -897,13 +951,29 @@ static void *out_socket_sever_thread(void *args)
             pass->out_fd = new_client_fd;
             if (pass->out_fd > 0)
             {
-                if (pass->sso) // Make sure parameters are ready.
+                pthread_mutex_lock(&ass.mutexlock_out);
+                pass->oss_write_count = 0;
+                if (ATRACE_ENABLED())
+                {
+                    ATRACE_INT("avh_osst_before_send_open_cmd", pass->oss_is_sent_open_cmd);
+                }
+                if (pass->sso && pass->oss_is_sent_open_cmd == 0) // Make sure parameters are ready.
                 {
                     if (send_open_cmd(pass, AUDIO_OUT) < 0)
                     {
                         ALOGE("Fail to send OPEN command to audio out client(%d)", pass->out_fd);
                     }
+                    else
+                    {
+                        pass->oss_is_sent_open_cmd = 1;
+                        ALOGE("pass->oss_is_sent_open_cmd is set to %d", pass->oss_is_sent_open_cmd);
+                    }
                 }
+                if (ATRACE_ENABLED())
+                {
+                    ATRACE_INT("avh_osst_after_send_open_cmd", pass->oss_is_sent_open_cmd);
+                }
+                pthread_mutex_unlock(&ass.mutexlock_out);
 
                 struct epoll_event event;
                 event.events = EPOLLOUT;
@@ -923,10 +993,13 @@ static void *out_socket_sever_thread(void *args)
     {
         ALOGW("%s Quit. port %d(%d)", __func__, pass->out_tcp_port, pass->out_fd);
     }
+    pthread_mutex_lock(&ass.mutexlock_out);
     pass->out_share_fd = -1;
     pass->out_share_buffer_size = 0;
-    close_socket_fd(pass->out_fd);
-    close_socket_fd(pass->oss_fd);
+    pass->oss_is_sent_open_cmd = 0;
+    close_socket_fd(&(pass->out_fd));
+    close_socket_fd(&(pass->oss_fd));
+    pthread_mutex_unlock(&ass.mutexlock_out);
     return NULL;
 }
 
@@ -1160,13 +1233,13 @@ static ssize_t in_read(struct audio_stream_in *stream, void *buffer,
     {
         if (ass.in_fd > 0)
         {
-            pthread_mutex_lock(&ass.mutexlock);
+            pthread_mutex_lock(&ass.mutexlock_in);
             ALOGV("in_read: send_open_cmd pthread_mutex_lock");
             if (send_open_cmd(&ass, AUDIO_IN) < 0)
             {
                 ALOGE("%s: Fail to send OPEN command to audio in client(%d)", __func__, ass.in_fd);
             }
-            pthread_mutex_unlock(&ass.mutexlock);
+            pthread_mutex_unlock(&ass.mutexlock_in);
         }
         ass.iss_read_flag = true;
     }
@@ -1471,7 +1544,7 @@ static void *in_socket_sever_thread(void *args)
         {
             ALOGW("%s Currently only receive one input client. Close previous client(%d)",
                   __func__, pass->in_fd);
-            pthread_mutex_lock(&pass->mutexlock);
+            pthread_mutex_lock(&pass->mutexlock_in);
             if (ass.iss_read_flag && pass->in_fd > 0 && pass->in_fd != new_client_fd)
             {
                 ALOGV("%s:%d send_close_cmd pthread_mutex_lock pass->in_fd %d", __func__, __LINE__, pass->in_fd);
@@ -1480,7 +1553,7 @@ static void *in_socket_sever_thread(void *args)
                     ALOGE("Fail to notify audio in client(%d) to close.", pass->in_fd);
                 }
             }
-            pthread_mutex_unlock(&pass->mutexlock);
+            pthread_mutex_unlock(&pass->mutexlock_in);
 
             if (pass->in_fd > 0)
             {
@@ -1488,8 +1561,7 @@ static void *in_socket_sever_thread(void *args)
                 {
                     ALOGE("Failed to delete audio in file descriptor to epoll");
                 }
-                close(pass->in_fd);
-                pass->in_fd = -1;
+                close_socket_fd(&(pass->in_fd));
                 pass->in_share_fd = -1;
                 pass->in_share_buffer_size = 0;
             }
@@ -1500,7 +1572,7 @@ static void *in_socket_sever_thread(void *args)
             pass->in_fd = new_client_fd;
             if (pass->in_fd > 0)
             {
-                pthread_mutex_lock(&pass->mutexlock);
+                pthread_mutex_lock(&pass->mutexlock_in);
                 if (pass->ssi && ass.iss_read_flag) // Make sure parameters are ready.
                 {
                     ALOGV("%s:%d send_close_cmd", __func__, __LINE__);
@@ -1509,7 +1581,7 @@ static void *in_socket_sever_thread(void *args)
                         ALOGE("Fail to send OPEN command to audio in client(%d)", pass->in_fd);
                     }
                 }
-                pthread_mutex_unlock(&pass->mutexlock);
+                pthread_mutex_unlock(&pass->mutexlock_in);
 
                 struct epoll_event event;
                 if (ass.enable_share_mem == 1)
@@ -1538,10 +1610,12 @@ static void *in_socket_sever_thread(void *args)
     {
         ALOGW("%s Quit. %s(%d)", __func__, pass->iss_file, pass->in_fd);
     }
+    pthread_mutex_lock(&pass->mutexlock_in);
     pass->in_share_fd = -1;
     pass->in_share_buffer_size = 0;
-    close_socket_fd(pass->in_fd);
-    close_socket_fd(pass->iss_fd);
+    close_socket_fd(&(pass->in_fd));
+    close_socket_fd(&(pass->iss_fd));
+    pthread_mutex_unlock(&pass->mutexlock_in);
     return NULL;
 }
 
@@ -1598,6 +1672,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out->frame_count = samples_per_milliseconds(
         STUB_OUTPUT_BUFFER_MILLISECONDS,
         out->sample_rate, 1);
+    out->stream.update_source_metadata = out_update_source_metadata;
 
     ALOGV("adev_open_output_stream: sample_rate: %u, channels: %x, format: %d,"
           " frames: %zu",
@@ -1605,10 +1680,28 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
           out->frame_count);
     *stream_out = &out->stream;
     ass.sso = out;
-    if (send_open_cmd(&ass, AUDIO_OUT) < 0)
+    pthread_mutex_lock(&ass.mutexlock_out);
+    if (ATRACE_ENABLED())
     {
-        ALOGE("Fail to send OPEN command to audio out client(%d)", ass.out_fd);
+        ATRACE_INT("avh_adv_open_output_stream_before_send_open_cmd", ass.oss_is_sent_open_cmd);
     }
+    if (ass.oss_is_sent_open_cmd == 0)
+    {
+        if (send_open_cmd(&ass, AUDIO_OUT) < 0)
+        {
+            ALOGE("Fail to send OPEN command to audio out client(%d)", ass.out_fd);
+        }
+        else
+        {
+            ass.oss_is_sent_open_cmd = 1;
+            ALOGE("ass.oss_is_sent_open_cmd is set to %d", ass.oss_is_sent_open_cmd);
+        }
+    }
+    if (ATRACE_ENABLED())
+    {
+        ATRACE_INT("avh_adv_open_output_stream_after_send_open_cmd", ass.oss_is_sent_open_cmd);
+    }
+    pthread_mutex_unlock(&ass.mutexlock_out);
 
     return 0;
 }
@@ -1616,12 +1709,15 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
 static void adev_close_output_stream(struct audio_hw_device *dev,
                                      struct audio_stream_out *stream)
 {
+    pthread_mutex_lock(&ass.mutexlock_out);
     if (send_close_cmd(ass.out_fd) < 0)
     {
         ALOGE("Fail to notify audio out client(%d) to close.", ass.out_fd);
     }
     ass.out_share_fd = -1;
     ass.sso = NULL;
+    ass.oss_is_sent_open_cmd = 0;
+    pthread_mutex_unlock(&ass.mutexlock_out);
     ALOGV("adev_close_output_stream...");
     free(stream);
 }
@@ -1775,7 +1871,7 @@ static void adev_close_input_stream(struct audio_hw_device *dev,
                                     struct audio_stream_in *stream)
 {
     ALOGV("adev_close_input_stream...");
-    pthread_mutex_lock(&ass.mutexlock);
+    pthread_mutex_lock(&ass.mutexlock_in);
     if (ass.iss_read_flag && ass.in_fd > 0)
     {
         ALOGV("%s:%d send_close_cmd pthread_mutex_lock ass.in_fd %d", __func__, __LINE__, ass.in_fd);
@@ -1785,10 +1881,11 @@ static void adev_close_input_stream(struct audio_hw_device *dev,
         }
     }
     ass.iss_read_flag = false;
-    pthread_mutex_unlock(&ass.mutexlock);
+    pthread_mutex_unlock(&ass.mutexlock_in);
 
     ass.in_share_fd = -1;
     ass.in_share_buffer_size = 0;
+    free(stream);
     return;
 }
 
@@ -1810,10 +1907,15 @@ static int adev_close(hw_device_t *device)
     {
         ALOGE("Failed to close output epoll file descriptor");
     }
+    pthread_mutex_lock(&ass.mutexlock_out);
     ass.out_share_fd = -1;
     ass.out_share_buffer_size = 0;
-    close_socket_fd(ass.out_fd);
-    close_socket_fd(ass.oss_fd);
+    close_socket_fd(&(ass.out_fd));
+    close_socket_fd(&(ass.oss_fd));
+    ass.oss_is_sent_open_cmd = 0;
+    pthread_mutex_unlock(&ass.mutexlock_out);
+    pthread_mutex_destroy(&ass.mutexlock_out);
+    ass.oss_write_count = 0;
 
     ass.iss_exit = 1;
     ass.iss_read_flag = false;
@@ -1825,13 +1927,15 @@ static int adev_close(hw_device_t *device)
     {
         ALOGE("Failed to close output epoll file descriptor");
     }
+    pthread_mutex_lock(&ass.mutexlock_in);
     ass.in_share_fd = -1;
     ass.in_share_buffer_size = 0;
-    close_socket_fd(ass.in_fd);
-    close_socket_fd(ass.iss_fd);
+    close_socket_fd(&(ass.in_fd));
+    close_socket_fd(&(ass.iss_fd));
+    pthread_mutex_unlock(&ass.mutexlock_in);
+    pthread_mutex_destroy(&ass.mutexlock_in);
 
     free(device);
-    pthread_mutex_destroy(&ass.mutexlock);
     ass.ssi = NULL;
     return 0;
 }
@@ -1930,6 +2034,9 @@ static int adev_open(const hw_module_t *module, const char *name,
     {
         ALOGE("Failed to create output epoll file descriptor");
     }
+    ass.oss_is_sent_open_cmd = 0;
+    pthread_mutex_init(&ass.mutexlock_out, 0);
+    ass.oss_write_count = 0;
 
     ass.ssi = NULL;
     ass.in_fd = -1;
@@ -1985,7 +2092,7 @@ static int adev_open(const hw_module_t *module, const char *name,
     }
     ALOGV("Input buffer milliseconds is %dms.", ass.input_buffer_milliseconds);
 
-    if (property_get("enable.audio.mask", buf, "0") > 0)
+    if (property_get("acg.audio.channel.mask.enable", buf, "0") > 0)
     {
         ass.audio_mask = atoi(buf);
         if (ass.audio_mask > 0)
@@ -2002,7 +2109,7 @@ static int adev_open(const hw_module_t *module, const char *name,
         ass.audio_mask = 0;
     }
     ALOGV("Audio mask is %s.", ass.audio_mask ? "the mask of channel" : "the number of channel");
-    pthread_mutex_init(&ass.mutexlock, 0);
+    pthread_mutex_init(&ass.mutexlock_in, 0);
 
     return 0;
 }
