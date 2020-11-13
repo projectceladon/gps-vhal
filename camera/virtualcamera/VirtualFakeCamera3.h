@@ -305,16 +305,7 @@ namespace android
     	};
 	//Clears camera vHAL buffer
 	void clearLastBuffer(char * fbuffer, int width, int height);
-	struct VideoSocketConfigInfo {
-        	uint32_t mCameraID;
-        	uint32_t mWidth;
-        	uint32_t mHeight;
-  	};
-
-  	struct camSocketInfo {
-    		uint32_t mCMD = CMD_NONE_CAMERA;
-    		struct VideoSocketConfigInfo info;
-  	};
+	uint32_t mCMD = CMD_NONE_CAMERA;
     };
 
 } // namespace android

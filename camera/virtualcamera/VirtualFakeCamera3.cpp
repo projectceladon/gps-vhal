@@ -69,10 +69,9 @@ const int32_t VirtualFakeCamera3::kAvailableFormats[] = {
     HAL_PIXEL_FORMAT_YCbCr_420_888, HAL_PIXEL_FORMAT_Y16};
 
 const uint32_t VirtualFakeCamera3::kAvailableRawSizes[4] = {
-    //320, 240,
     640, 480,
-    //1280, 720
-    // mSensorWidth, mSensorHeight
+    // 1280, 720
+    //    mSensorWidth, mSensorHeight
 };
 
 /**
@@ -160,20 +159,16 @@ status_t VirtualFakeCamera3::connectCamera(hw_device_t **device) {
   status_t res;
 
   int sendSize = 0;
-  struct camSocketInfo mSockInfo;
-  mSockInfo.mCMD = CMD_OPEN_CAMERA;
-  mSockInfo.info.mCameraID = gVirtualCameraFactory.getmCameraId();
-  mSockInfo.info.mWidth = gVirtualCameraFactory.getmWidth();
-  mSockInfo.info.mHeight = gVirtualCameraFactory.getmHeight();
-  struct camSocketInfo  *cmd = &mSockInfo;
+  mCMD = CMD_OPEN_CAMERA;
+  uint32_t *cmd = &mCMD;
+
   mSocketfd = gVirtualCameraFactory.getSocketFd();
-  ALOGE("[Kaushal] %s: mSocketfd: [%d] mCameraId [%d] mSockInfo.info.mWidth[%d] mSockInfo.info.mHeight[%d]", 
-	__FUNCTION__, mSocketfd,mSockInfo.info.mCameraID, mSockInfo.info.mWidth, mSockInfo.info.mHeight);
+  ALOGV(LOG_TAG "%s: CSST: mSocketfd: %d", __FUNCTION__, mSocketfd);
   if (mSocketfd > 0) {
-    if ((sendSize = send(mSocketfd, cmd, sizeof(camSocketInfo), 0) < 0)) {
-      ALOGE("%s: Command CMD_OPEN_CAMERA send fail. sendSize: %d, err %s ",
+    if ((sendSize = send(mSocketfd, cmd, sizeof(cmd), 0) < 0)) {
+      ALOGE(LOG_TAG "%s: Command CMD_OPEN_CAMERA send fail. sendSize: %d, err %s ",
             __FUNCTION__, sendSize, strerror(errno));
-      mSockInfo.mCMD = CMD_NONE_CAMERA;
+      mCMD = CMD_NONE_CAMERA;
     }
   }
 
@@ -217,12 +212,8 @@ status_t VirtualFakeCamera3::closeCamera() {
   status_t res;
 
   int sendSize = 0;
-  struct camSocketInfo mSockInfo;
-  mSockInfo.mCMD = CMD_CLOSE_CAMERA;
-  mSockInfo.info.mCameraID = gVirtualCameraFactory.getmCameraId();
-  mSockInfo.info.mWidth = gVirtualCameraFactory.getmWidth();
-  mSockInfo.info.mHeight = gVirtualCameraFactory.getmHeight();
-  struct camSocketInfo *cmd = &mSockInfo;
+  mCMD = CMD_CLOSE_CAMERA;
+  uint32_t *cmd = &mCMD;
   // Workaround: first time after flash camera open close happens very fast
   // and start video stream didnt starts properly so need wait for start
   // stream. Need to be removed later once handle startPublication properly in
@@ -234,15 +225,13 @@ status_t VirtualFakeCamera3::closeCamera() {
   }
 
   mSocketfd = gVirtualCameraFactory.getSocketFd();
-  ALOGE("[Kaushal] %s: mSocketfd: [%d] mCameraId [%d] mWidth[%d] mHeight[%d]",
-        __FUNCTION__, mSocketfd, gVirtualCameraFactory.getmCameraId(), 
-	mSockInfo.info.mWidth, mSockInfo.info.mHeight);
+  ALOGV(LOG_TAG " %s: CSST:mSocketfd: %d", __FUNCTION__, mSocketfd);
 
   if (mSocketfd > 0) {
-    if ((sendSize = send(mSocketfd, cmd, sizeof(camSocketInfo), 0) < 0)) {
-      ALOGE("%s: Command CMD_CLOSE_CAMERA send fail. sendSize: %d, err  %s",
+    if ((sendSize = send(mSocketfd, cmd, sizeof(cmd), 0) < 0)) {
+      ALOGE(LOG_TAG "%s: Command CMD_CLOSE_CAMERA send fail. sendSize: %d, err  %s",
             __FUNCTION__, sendSize, strerror(errno));
-      mSockInfo.mCMD = CMD_NONE_CAMERA;
+      mCMD = CMD_NONE_CAMERA;
     }
   }
 
@@ -276,7 +265,7 @@ status_t VirtualFakeCamera3::closeCamera() {
     mStreams.clear();
     mReadoutThread.clear();
   }
-  mSockInfo.mCMD = CMD_NONE_CAMERA;
+  mCMD = CMD_NONE_CAMERA;
 
   ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
   char *fbuffer =
@@ -284,7 +273,7 @@ status_t VirtualFakeCamera3::closeCamera() {
   ALOGV(LOG_TAG " %s: clearing buffer[%d]",
 	__FUNCTION__,
 	handle->clientRevCount);
-  clearLastBuffer(fbuffer, mSockInfo.info.mWidth, mSockInfo.info.mHeight);
+  clearLastBuffer(fbuffer, 640, 480);
 
   return VirtualCamera3::closeCamera();
 }
@@ -337,8 +326,8 @@ status_t VirtualFakeCamera3::configureStreams(
       return BAD_VALUE;
     }
 
-    ALOGV(
-        "[Kaushal] %s: Stream %p (id %zu), type %d, usage 0x%x, format 0x%x "
+    ALOGVV(
+        " %s: Stream %p (id %zu), type %d, usage 0x%x, format 0x%x "
         "width %d, height %d",
         __FUNCTION__, newStream, i, newStream->stream_type, newStream->usage,
         newStream->format, newStream->width, newStream->height);
@@ -364,16 +353,11 @@ status_t VirtualFakeCamera3::configureStreams(
     if (newStream->width == 0 || newStream->height == 0 ||
         newStream->width > (uint32_t)mSensorWidth ||
         newStream->height > (uint32_t)mSensorHeight) {
-      ALOGE("%s: Unsupported stream width %d height %d", __FUNCTION__,
+      ALOGE("%s: Unsupported stream width 0x%x height 0x%x", __FUNCTION__,
             newStream->width, newStream->height);
       return BAD_VALUE;
     }
-   // Save global width and height 
-   // if( newStream-> format == 0x1 || newStream-> format ==0x23){ 
-    	gVirtualCameraFactory.setmWidth(newStream->width);
-	gVirtualCameraFactory.setmHeight(newStream->height);
-	ALOGE("[Kaushal]: mWidth [%d] mHeight[%d]", gVirtualCameraFactory.getmWidth(), gVirtualCameraFactory.getmHeight());
-   // }
+
     bool validFormat = false;
     for (size_t f = 0;
          f < sizeof(kAvailableFormats) / sizeof(kAvailableFormats[0]); f++) {
@@ -980,6 +964,9 @@ status_t VirtualFakeCamera3::processCaptureRequest(
     destBuf.streamId = kGenericStreamId;
     destBuf.width = srcBuf.stream->width;
     destBuf.height = srcBuf.stream->height;
+    // Fix ME (dest buffer fixed for 640x480)
+    // destBuf.width = 640;
+    // destBuf.height = 480;
     // inline with goldfish gralloc
     if (srcBuf.stream->format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) {
 #ifndef USE_GRALLOC1
@@ -1050,7 +1037,7 @@ status_t VirtualFakeCamera3::processCaptureRequest(
         ALOGE("%s: Request %d: Buffer %zu: Unable to lock buffer", __FUNCTION__,
               frameNumber, i);
       } else {
-        ALOGE("[Billore] %s, stream format 0x%x width %d height %d buffer 0x%p img 0x%p",
+        ALOGVV(" %s, stream format 0x%x width %d height %d buffer 0x%p img 0x%p",
                __FUNCTION__, destBuf.format, destBuf.width, destBuf.height,
                destBuf.buffer, destBuf.img);
       }
@@ -1236,7 +1223,7 @@ status_t VirtualFakeCamera3::constructStaticInfo() {
     }
   }
 
-  if (width <= 1280 || height <= 720) {
+  if (width < 1280 || height < 720) {
     width = 640;
     height = 480;
   }
@@ -1278,11 +1265,6 @@ status_t VirtualFakeCamera3::constructStaticInfo() {
   ADD_STATIC_ENTRY(ANDROID_SENSOR_INFO_PIXEL_ARRAY_SIZE, pixelArray, 2);
   const int32_t activeArray[] = {0, 0, mSensorWidth, mSensorHeight};
   ADD_STATIC_ENTRY(ANDROID_SENSOR_INFO_ACTIVE_ARRAY_SIZE, activeArray, 4);
-
-
-  gVirtualCameraFactory.setmWidth(mSensorWidth);
-  gVirtualCameraFactory.setmHeight(mSensorHeight);
-  ALOGE("[Kaushal]: mWidth [%d] mHeight[%d]", gVirtualCameraFactory.getmWidth(), gVirtualCameraFactory.getmHeight());
 
   static const int32_t orientation = 0;  // Aligned with 'long edge'
   ADD_STATIC_ENTRY(ANDROID_SENSOR_ORIENTATION, &orientation, 1);
@@ -1461,21 +1443,7 @@ status_t VirtualFakeCamera3::constructStaticInfo() {
       HAL_PIXEL_FORMAT_BLOB,
       176,
       144,
-      ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT
-#if 0 
-      HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED,
-      1280,
-      720,
       ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT,
-      HAL_PIXEL_FORMAT_YCbCr_420_888,
-      1280,
-      720,
-      ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT,
-      HAL_PIXEL_FORMAT_BLOB,
-      1280,
-      720,
-      ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT,
-#endif
   };
 
   // Always need to include 640x480 in basic formats
@@ -1576,21 +1544,7 @@ status_t VirtualFakeCamera3::constructStaticInfo() {
       HAL_PIXEL_FORMAT_BLOB,
       176,
       144,
-      Sensor::kFrameDurationRange[0]
-#if 0
-      HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED,
-      1280,
-      720,
       Sensor::kFrameDurationRange[0],
-      HAL_PIXEL_FORMAT_YCbCr_420_888,
-      1280,
-      720,
-      Sensor::kFrameDurationRange[0],
-      HAL_PIXEL_FORMAT_BLOB,
-      1280,
-      720,
-      Sensor::kFrameDurationRange[0],
-#endif
   };
 
   // Always need to include 640x480 in basic formats
@@ -1688,21 +1642,7 @@ status_t VirtualFakeCamera3::constructStaticInfo() {
       HAL_PIXEL_FORMAT_RGBA_8888,
       176,
       144,
-      0
-#if 0
-      HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED,
-      1280,
-      720,
       0,
-      HAL_PIXEL_FORMAT_YCbCr_420_888,
-      1280,
-      720,
-      0,
-      HAL_PIXEL_FORMAT_RGBA_8888,
-      1280,
-      720,
-      0,
-#endif
   };
 
   // Always need to include 640x480 in basic formats

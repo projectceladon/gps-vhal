@@ -223,9 +223,7 @@ bool CameraSocketServerThread::threadLoop() {
     char *fbuffer =
           (char *)handle->clientBuf[handle->clientRevCount % 1].buffer;
 
-   int width = gVirtualCameraFactory.getmWidth();
-   int height = gVirtualCameraFactory.getmHeight();
-   clearBuffer(fbuffer, width, height);
+    clearBuffer(fbuffer, 640, 480);
 
     ALOGVV(LOG_TAG " %s: clearing buffer[%d]",
 	__FUNCTION__, handle->clientRevCount);
@@ -250,14 +248,11 @@ bool CameraSocketServerThread::threadLoop() {
     gVirtualCameraFactory.setSocketFd(mClientFd);
 
     int size = 0;
-    int frame_size = 0;
     static int i;
     struct pollfd fd;
     int ret;
     int event;
 
-    frame_size = gVirtualCameraFactory.calulateI420FrameSize();
-    ALOGE("[Kaushal]: frame_size[%d]", frame_size);
     fd.fd = mClientFd;  // your socket handler
     fd.events = POLLIN | POLLHUP;
 
@@ -282,7 +277,7 @@ bool CameraSocketServerThread::threadLoop() {
 	  char *fbuffer =
 		(char *)handle->clientBuf[handle->clientRevCount % 1].buffer;
 	  ALOGW(LOG_TAG " %s: clearing buffer[%d]", __FUNCTION__, handle->clientRevCount);
-	  clearBuffer(fbuffer, width, height);
+	  clearBuffer(fbuffer, 640, 480);
           break;
         }
       } else {
@@ -308,10 +303,10 @@ bool CameraSocketServerThread::threadLoop() {
 	  char *fbuffer =
 		(char *)handle->clientBuf[handle->clientRevCount % 1].buffer;
 	  ALOGW(LOG_TAG " %s: clearing buffer[%d]", __FUNCTION__, handle->clientRevCount);
-	  clearBuffer(fbuffer, width, height);
+	  clearBuffer(fbuffer, 640, 480);
           break;
         } else if (event & POLLIN) {  // preview / record
-         if ((size = recv(mClientFd, (char *)fbuffer, frame_size, MSG_WAITALL)) >
+          if ((size = recv(mClientFd, (char *)fbuffer, 460800, MSG_WAITALL)) >
               0) {
             handle->clientRevCount++;
             ALOGVV(LOG_TAG
