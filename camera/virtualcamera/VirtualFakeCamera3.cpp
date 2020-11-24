@@ -326,7 +326,7 @@ status_t VirtualFakeCamera3::configureStreams(
       return BAD_VALUE;
     }
 
-    ALOGVV(
+    ALOGV(
         " %s: Stream %p (id %zu), type %d, usage 0x%x, format 0x%x "
         "width %d, height %d",
         __FUNCTION__, newStream, i, newStream->stream_type, newStream->usage,
@@ -822,6 +822,8 @@ status_t VirtualFakeCamera3::processCaptureRequest(
     camera3_capture_request *request) {
   Mutex::Autolock l(mLock);
   status_t res;
+  status_t ret;
+  uint64_t useflag = 0;
   mprocessCaptureRequestFlag = true;
   /** Validation */
 
@@ -1017,6 +1019,15 @@ status_t VirtualFakeCamera3::processCaptureRequest(
           // This is only valid because we know that emulator's
           // YCbCr_420_888 is really contiguous NV21 under the hood
           destBuf.img = static_cast<uint8_t *>(ycbcr.y);
+		  //WR: rura app, OAM-94702
+		  ret = GrallocModule::getInstance().getProducerUsage(
+			  *(destBuf.buffer), &useflag);
+			  if(ret == 0) {
+				  mSensor->setBufferUsage(useflag);
+		  	  } else {
+				  ALOGVV(" %s: Unable to get buffer usage", __FUNCTION__);
+			  }
+		
         } else {
           ALOGE("Unexpected private format for flexible YUV: 0x%x",
                 destBuf.format);

@@ -255,8 +255,15 @@ namespace android
 	// vHAL buffer
 	int srcWidth = 640;
 	int srcHeight = 480;
-    };
-
+	public:
+		uint64_t useflag;
+		void setBufferUsage(uint64_t flag){
+			useflag = flag;
+		}
+		uint64_t getBufferUsage(){
+			return useflag;
+		}
+	};
 } // namespace android
 
 #endif // HW_EMULATOR_CAMERA2_SENSOR_H

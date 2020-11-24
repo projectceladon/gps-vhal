@@ -2,6 +2,12 @@
 #define EMU_CAMERA_GRALLOC_MODULE_H
 
 //#define LOG_NDEBUG 0
+#if defined(LOG_NNDEBUG) && LOG_NNDEBUG == 0
+#define ALOGVV ALOGV
+#else
+#define ALOGVV(...) ((void)0)
+#endif
+
 #include <hardware/gralloc.h>
 #include <log/log.h>
 #include <vector>
@@ -17,6 +23,17 @@ class GrallocModule {
     static GrallocModule instance;
     return instance;
   }
+
+  int getProducerUsage(buffer_handle_t buffer,
+		  uint64_t * /*gralloc1_producer_usage_t*/ outUsage) {
+		if(m_gralloc1_getProducerUsage){
+			return m_gralloc1_getProducerUsage(m_gralloc1_device, buffer, outUsage);
+		} else {
+			ALOGVV("m_gralloc1_getProducerUsage is NULL!!!");
+			return -1;
+		}
+	
+	}
 
   int lock(buffer_handle_t handle, int usage, int left, int top, int width,
            int height, void **vaddr) {
@@ -147,6 +164,9 @@ class GrallocModule {
         m_gralloc1_getNumFlexPlanes =
             (GRALLOC1_PFN_GET_NUM_FLEX_PLANES)m_gralloc1_device->getFunction(
                 m_gralloc1_device, GRALLOC1_FUNCTION_GET_NUM_FLEX_PLANES);
+		m_gralloc1_getProducerUsage =
+			(GRALLOC1_PFN_GET_PRODUCER_USAGE)m_gralloc1_device->getFunction(
+			m_gralloc1_device, GRALLOC1_FUNCTION_GET_PRODUCER_USAGE);
         break;
 #endif
       default:
@@ -162,6 +182,7 @@ class GrallocModule {
   GRALLOC1_PFN_UNLOCK m_gralloc1_unlock = nullptr;
   GRALLOC1_PFN_LOCK_FLEX m_gralloc1_lockflex = nullptr;
   GRALLOC1_PFN_GET_NUM_FLEX_PLANES m_gralloc1_getNumFlexPlanes = nullptr;
+  GRALLOC1_PFN_GET_PRODUCER_USAGE m_gralloc1_getProducerUsage = nullptr;
 #endif
 };
 

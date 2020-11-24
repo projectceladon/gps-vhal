@@ -641,15 +641,29 @@ void Sensor::captureNV21(uint8_t *img, uint32_t gain, uint32_t width,
         ALOGVV(" %s: Not scaling dstWidth: %d dstHeight: %d",
                 __FUNCTION__, width, height);
   	if (m_major_version == 1) {
-		ALOGVV(LOG_TAG " %s: convert I420 to NV12!", __FUNCTION__);
-		if (int ret = libyuv::I420ToNV12(pTempY, srcWidth,
+		int useflag = (int)getBufferUsage();
+		ALOGVV(LOG_TAG " %s: [SG1] getBufferUsage %d", __FUNCTION__, useflag);
+
+    	//WR: rura app, OAM-94702
+		if(useflag == 6) {
+			ALOGVV(LOG_TAG " %s: [rura] [SG1] convert I420 to NV21!", __FUNCTION__);
+		        if (int ret = libyuv::I420ToNV21(pTempY, srcWidth,
+                  pTempU, srcWidth >> 1,
+                  pTempV, srcWidth >> 1,
+                  img, width,
+                  dst_vu, width,
+                  width, height)) {}
+		} else {
+			ALOGVV(LOG_TAG " %s: [SG1] convert I420 to NV12!", __FUNCTION__);
+			if (int ret = libyuv::I420ToNV12(pTempY, srcWidth,
 					pTempU, srcWidth >> 1,
 					pTempV, srcWidth >> 1,
 					img, width,
 					dst_vu, width,
 					width, height)) {}
-	  } else {
-		ALOGVV(LOG_TAG " %s: convert I420 to NV21!", __FUNCTION__);
+		}
+	} else {
+		ALOGVV(LOG_TAG " %s: [NON-SG1] convert I420 to NV21!", __FUNCTION__);
 		if (int ret = libyuv::I420ToNV21(pTempY, srcWidth,
 					pTempU, srcWidth >> 1,
 					pTempV, srcWidth >> 1,
@@ -685,7 +699,7 @@ void Sensor::captureNV21(uint8_t *img, uint32_t gain, uint32_t width,
         ALOGVV(" %s: Scaling done!", __FUNCTION__);
 
 	if (m_major_version == 1) {
-                ALOGVV(LOG_TAG " %s: convert I420 to NV12!", __FUNCTION__);
+				ALOGVV(LOG_TAG " %s: [SG1] convert I420 to NV12!", __FUNCTION__);
                 if (int ret = libyuv::I420ToNV12(pDstY, width,
                                         pDstU, width >> 1,
                                         pDstV, width >> 1,
@@ -693,8 +707,8 @@ void Sensor::captureNV21(uint8_t *img, uint32_t gain, uint32_t width,
                                         temp_dst_vu, width,
                                         width, height)) {}
           } else {
-                ALOGVV(LOG_TAG " %s: convert I420 to NV21!", __FUNCTION__);
-                if (int ret = libyuv::I420ToNV21(pDstY, width,
+                ALOGVV(LOG_TAG " %s: [NON-SG1] convert I420 to NV21!", __FUNCTION__);
+				if (int ret = libyuv::I420ToNV21(pDstY, width,
                                         pDstU, width >> 1,
                                         pDstV, width >> 1,
                                         img, width,
