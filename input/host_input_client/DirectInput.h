@@ -17,14 +17,14 @@
 class DirectInputReceiver : public IInputReceiver
 {
 public:
-    DirectInputReceiver(int id);
+    DirectInputReceiver(int id, int inputId);
     virtual ~DirectInputReceiver();
 
     // IInputReceiver
     int getTouchInfo(TouchInfo *info) override;
     int onInputMessage(const std::string &msg) override;
     int onKeyCode(uint16_t scanCode, uint32_t mask) override;
-    int onJoystickMessage(const std::string& msg) override;
+    int onJoystickMessage(const std::string &msg) override;
     int onKeyChar(char ch) override;
     int onText(const char *msg) override;
 
@@ -36,7 +36,7 @@ protected:
     uint32_t GetMaxPositionX() { return kMaxPositionX - 1; }
     uint32_t GetMaxPositionY() { return kMaxPositionY - 1; }
 
-    bool CreateTouchDevice(int id);
+    bool CreateTouchDevice(int id, int inputId);
     bool SendEvent(uint16_t type, uint16_t code, int32_t value);
     bool SendDown(int32_t slot, int32_t x, int32_t y, int32_t pressure);
     bool SendUp(int32_t slot, int32_t x, int32_t y);
@@ -44,6 +44,9 @@ protected:
     bool SendCommit();
     bool SendReset();
     void SendWait(uint32_t ms);
+    bool joystickEnable() override;
+    bool joystickDisable() override;
+    bool getJoystickStatus() override;
 
 private:
     const char *kEnvWorkDir = "AIC_WORK_DIR";
@@ -68,5 +71,9 @@ private:
     Contact mContacts[kMaxSlot];
     int32_t mTrackingId = 0;
     uint32_t mEnabledSlots = 0;
+    int mDebug = 0;
+    bool mJoystickStatus = false;
+    int32_t mInstanceId = 0;
+    int32_t mInputId = 0;
 };
 #endif //__DIRECT_INPUT_RECEIVER_H__
