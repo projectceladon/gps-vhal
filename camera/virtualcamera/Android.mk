@@ -52,9 +52,9 @@ emulator_camera_c_includes := external/libjpeg-turbo \
 	external/libexif \
 	external/libyuv/files/include \
 	frameworks/native/include/media/hardware \
-	$(LOCAL_PATH)/../../../device/generic/goldfish/include \
-	$(LOCAL_PATH)/../../../device/generic/goldfish-opengl/system/OpenglSystemCommon \
-	$(LOCAL_PATH)/../../../hardware/libhardware/modules/gralloc \
+	device/generic/goldfish/include \
+	device/generic/goldfish-opengl/system/OpenglSystemCommon \
+	hardware/libhardware/modules/gralloc \
 	$(call include-path-for, camera)
 
 emulator_camera_src := \
