@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2016 The Android Open Source Project
+ * Copyright (C) 2016 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,18 +20,15 @@
 struct _ExifData;
 typedef struct _ExifData ExifData;
 
-namespace android
-{
+namespace android {
 
-    /* Create a thumbnail from NV21 source data in |sourceImage| with the given
-    * dimensions. The resulting thumbnail is JPEG compressed and a pointer and size
-    * is placed in |exifData| which takes ownership of the allocated memory.
-    */
-    bool createThumbnail(const unsigned char *sourceImage,
-                         int sourceWidth, int sourceHeight,
-                         int thumbnailWidth, int thumbnailHeight, int quality,
-                         ExifData *exifData);
+/* Create a thumbnail from NV21 source data in |sourceImage| with the given
+ * dimensions. The resulting thumbnail is JPEG compressed and a pointer and size
+ * is placed in |exifData| which takes ownership of the allocated memory.
+ */
+bool createThumbnail(const unsigned char *sourceImage, int sourceWidth, int sourceHeight,
+                     int thumbnailWidth, int thumbnailHeight, int quality, ExifData *exifData);
 
-} // namespace android
+}  // namespace android
 
-#endif // GOLDFISH_CAMERA_THUMBNAIL_H
+#endif  // GOLDFISH_CAMERA_THUMBNAIL_H

@@ -29,92 +29,89 @@
 #include <GLES/gl.h>
 #include <GLES/glext.h>
 
-namespace android
-{
+namespace android {
 
-    class VirtualFakeCamera;
+class VirtualFakeCamera;
 
-    /* Encapsulates a fake camera device.
-    * Fake camera device emulates a camera device by providing frames containing
-    * an image rendered by opengl, that takes rotating input from host
-    */
-    class VirtualFakeRotatingCameraDevice : public VirtualCameraDevice
-    {
-    public:
-        /* Constructs VirtualFakeRotatingCameraDevice instance. */
-        explicit VirtualFakeRotatingCameraDevice(VirtualFakeCamera *camera_hal);
+/* Encapsulates a fake camera device.
+ * Fake camera device emulates a camera device by providing frames containing
+ * an image rendered by opengl, that takes rotating input from host
+ */
+class VirtualFakeRotatingCameraDevice : public VirtualCameraDevice {
+public:
+    /* Constructs VirtualFakeRotatingCameraDevice instance. */
+    explicit VirtualFakeRotatingCameraDevice(VirtualFakeCamera *camera_hal);
 
-        /* Destructs VirtualFakeRotatingCameraDevice instance. */
-        ~VirtualFakeRotatingCameraDevice();
+    /* Destructs VirtualFakeRotatingCameraDevice instance. */
+    ~VirtualFakeRotatingCameraDevice();
 
-        /***************************************************************************
-         * Virtual camera device abstract interface implementation.
-         * See declarations of these methods in VirtualCameraDevice class for
-         * information on each of these methods.
-         **************************************************************************/
+    /***************************************************************************
+     * Virtual camera device abstract interface implementation.
+     * See declarations of these methods in VirtualCameraDevice class for
+     * information on each of these methods.
+     **************************************************************************/
 
-    public:
-        /* Connects to the camera device.
-        * Since there is no real device to connect to, this method does nothing,
-        * but changes the state.
-        */
-        status_t connectDevice();
+public:
+    /* Connects to the camera device.
+     * Since there is no real device to connect to, this method does nothing,
+     * but changes the state.
+     */
+    status_t connectDevice();
 
-        /* Disconnects from the camera device.
-        * Since there is no real device to disconnect from, this method does
-        * nothing, but changes the state.
-        */
-        status_t disconnectDevice();
+    /* Disconnects from the camera device.
+     * Since there is no real device to disconnect from, this method does
+     * nothing, but changes the state.
+     */
+    status_t disconnectDevice();
 
-        /* Starts the camera device. */
-        status_t startDevice(int width, int height, uint32_t pix_fmt);
+    /* Starts the camera device. */
+    status_t startDevice(int width, int height, uint32_t pix_fmt);
 
-        /* Stops the camera device. */
-        status_t stopDevice();
+    /* Stops the camera device. */
+    status_t stopDevice();
 
-    protected:
-        /* Implementation of the frame production routine. */
-        bool produceFrame(void *buffer, int64_t *timestamp) override;
+protected:
+    /* Implementation of the frame production routine. */
+    bool produceFrame(void *buffer, int64_t *timestamp) override;
 
-        /****************************************************************************
-         * Fake camera device private API
-         ***************************************************************************/
+    /****************************************************************************
+     * Fake camera device private API
+     ***************************************************************************/
 
-    private:
-        void fillBuffer(void *buffer);
-        void render(int width, int height);
-        int init_gl_surface(int width, int height);
-        void get_eye_x_y_z(float *x, float *y, float *z);
-        void get_yawing(float *x, float *y, float *z);
-        void read_rotation_vector(double *yaw, double *pitch, double *roll);
-        void read_sensor();
-        void init_sensor();
-        void free_gl_surface(void);
-        void update_scene(float width, float height);
-        void create_texture_dotx(int width, int height);
+private:
+    void fillBuffer(void *buffer);
+    void render(int width, int height);
+    int init_gl_surface(int width, int height);
+    void get_eye_x_y_z(float *x, float *y, float *z);
+    void get_yawing(float *x, float *y, float *z);
+    void read_rotation_vector(double *yaw, double *pitch, double *roll);
+    void read_sensor();
+    void init_sensor();
+    void free_gl_surface(void);
+    void update_scene(float width, float height);
+    void create_texture_dotx(int width, int height);
 
-        bool mOpenglReady = false;
-        EGLDisplay mEglDisplay;
-        EGLSurface mEglSurface;
-        EGLContext mEglContext;
-        GLuint mTexture;
-        uint8_t *mPixelBuf; // = new uint8_t[width * height * kGlBytesPerPixel];;
-        int mSensorPipe = -1;
-        enum SENSOR_VALUE_TYPE
-        {
-            SENSOR_VALUE_ACCEL_X = 0,
-            SENSOR_VALUE_ACCEL_Y = 1,
-            SENSOR_VALUE_ACCEL_Z = 2,
-            SENSOR_VALUE_MAGNETIC_X = 3,
-            SENSOR_VALUE_MAGNETIC_Y = 4,
-            SENSOR_VALUE_MAGNETIC_Z = 5,
-            SENSOR_VALUE_ROTATION_X = 6,
-            SENSOR_VALUE_ROTATION_Y = 7,
-            SENSOR_VALUE_ROTATION_Z = 8,
-        };
-
-        float mSensorValues[9] = {0};
+    bool mOpenglReady = false;
+    EGLDisplay mEglDisplay;
+    EGLSurface mEglSurface;
+    EGLContext mEglContext;
+    GLuint mTexture;
+    uint8_t *mPixelBuf;  // = new uint8_t[width * height * kGlBytesPerPixel];;
+    int mSensorPipe = -1;
+    enum SENSOR_VALUE_TYPE {
+        SENSOR_VALUE_ACCEL_X = 0,
+        SENSOR_VALUE_ACCEL_Y = 1,
+        SENSOR_VALUE_ACCEL_Z = 2,
+        SENSOR_VALUE_MAGNETIC_X = 3,
+        SENSOR_VALUE_MAGNETIC_Y = 4,
+        SENSOR_VALUE_MAGNETIC_Z = 5,
+        SENSOR_VALUE_ROTATION_X = 6,
+        SENSOR_VALUE_ROTATION_Y = 7,
+        SENSOR_VALUE_ROTATION_Z = 8,
     };
+
+    float mSensorValues[9] = {0};
+};
 
 }; /* namespace android */
 

@@ -30,26 +30,26 @@ namespace android {
 
 class VirtualCameraFactory;
 class CameraSocketServerThread : public Thread {
- public:
-  CameraSocketServerThread(int containerId, VirtualCameraFactory &ecf);
-  ~CameraSocketServerThread();
+public:
+    CameraSocketServerThread(int containerId, VirtualCameraFactory &ecf);
+    ~CameraSocketServerThread();
 
-  virtual void requestExit();
-  virtual status_t requestExitAndWait();
-  int getClientFd();
-  void clearBuffer(char * fbuffer, int width, int height);
+    virtual void requestExit();
+    virtual status_t requestExitAndWait();
+    int getClientFd();
+    void clearBuffer(char *fbuffer, int width, int height);
 
- private:
-  virtual status_t readyToRun();
-  virtual bool threadLoop();
+private:
+    virtual status_t readyToRun();
+    virtual bool threadLoop();
 
-  Mutex mMutex;
-  bool mRunning;  // guarding only when it's important
-  int mSocketServerFd = -1;
-  char mSocketServerFile[64];
-  int mClientFd = -1;
-  bool mSocktypeIP = false;
-  android::VirtualCameraFactory *pecf = nullptr;
+    Mutex mMutex;
+    bool mRunning;  // guarding only when it's important
+    int mSocketServerFd = -1;
+    char mSocketServerFile[64];
+    int mClientFd = -1;
+    bool mSocktypeIP = false;
+    android::VirtualCameraFactory *pecf = nullptr;
 };
 }  // namespace android
 

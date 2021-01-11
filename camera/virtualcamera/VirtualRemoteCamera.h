@@ -25,50 +25,46 @@
 #include "VirtualCamera.h"
 #include "VirtualRemoteCameraDevice.h"
 
-namespace android
-{
+namespace android {
 
-    /* Encapsulates functionality of an virtual camera connected to the host.
-    */
-    class VirtualRemoteCamera : public VirtualCamera
-    {
-    public:
-        /* Constructs VirtualRemoteCamera instance. */
-        VirtualRemoteCamera(int cameraId, struct hw_module_t *module);
+/* Encapsulates functionality of an virtual camera connected to the host.
+ */
+class VirtualRemoteCamera : public VirtualCamera {
+public:
+    /* Constructs VirtualRemoteCamera instance. */
+    VirtualRemoteCamera(int cameraId, struct hw_module_t *module);
 
-        /* Destructs VirtualRemoteCamera instance. */
-        ~VirtualRemoteCamera();
+    /* Destructs VirtualRemoteCamera instance. */
+    ~VirtualRemoteCamera();
 
-        /***************************************************************************
-         * VirtualCamera virtual overrides.
-         **************************************************************************/
+    /***************************************************************************
+     * VirtualCamera virtual overrides.
+     **************************************************************************/
 
-    public:
-        /* Initializes VirtualRemoteCamera instance. */
-        status_t Initialize(const char *device_name,
-                            const char *frame_dims,
-                            const char *facing_dir);
+public:
+    /* Initializes VirtualRemoteCamera instance. */
+    status_t Initialize(const char *device_name, const char *frame_dims, const char *facing_dir);
 
-        /***************************************************************************
-         * VirtualCamera abstract API implementation.
-         **************************************************************************/
+    /***************************************************************************
+     * VirtualCamera abstract API implementation.
+     **************************************************************************/
 
-    protected:
-        /* Gets virtual camera device ised by this instance of the virtual camera.
-        */
-        VirtualCameraDevice *getCameraDevice();
+protected:
+    /* Gets virtual camera device ised by this instance of the virtual camera.
+     */
+    VirtualCameraDevice *getCameraDevice();
 
-        /***************************************************************************
-         * Data memebers.
-         **************************************************************************/
+    /***************************************************************************
+     * Data memebers.
+     **************************************************************************/
 
-    protected:
-        /* Contained remote camera device object. */
-        VirtualRemoteCameraDevice mRemoteCameraDevice;
+protected:
+    /* Contained remote camera device object. */
+    VirtualRemoteCameraDevice mRemoteCameraDevice;
 
-        /* Supported frame dimensions reported by the camera device. */
-        String8 mFrameDims;
-    };
+    /* Supported frame dimensions reported by the camera device. */
+    String8 mFrameDims;
+};
 
 }; /* namespace android */
 

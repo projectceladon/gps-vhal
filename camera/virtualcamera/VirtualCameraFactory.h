@@ -25,301 +25,277 @@
 #include <utils/RefBase.h>
 #include <vector>
 
-namespace android
-{
+namespace android {
 
-    class VirtualCameraHotplugThread;
-    class CameraSocketServerThread;
+class VirtualCameraHotplugThread;
+class CameraSocketServerThread;
+
+/*
+ * Contains declaration of a class VirtualCameraFactory that manages cameras
+ * available for the emulation. A global instance of this class is statically
+ * instantiated and initialized when camera emulation HAL is loaded.
+ */
+
+/*
+ * Class VirtualCameraFactoryManages cameras available for the emulation.
+ *
+ * When the global static instance of this class is created on the module load,
+ * it enumerates cameras available for the emulation by connecting to the
+ * emulator's 'camera' service. For every camera found out there it creates an
+ * instance of an appropriate class, and stores it an in array of virtual
+ * cameras. In addition to the cameras reported by the emulator, a fake camera
+ * emulator is always created, so there is always at least one camera that is
+ * available.
+ *
+ * Instance of this class is also used as the entry point for the camera HAL API,
+ * including:
+ *  - hw_module_methods_t::open entry point
+ *  - camera_module_t::get_number_of_cameras entry point
+ *  - camera_module_t::get_camera_info entry point
+ *
+ */
+class VirtualCameraFactory {
+public:
+    /*
+     * Constructs VirtualCameraFactory instance.
+     * In this constructor the factory will create and initialize a list of
+     * virtual cameras. All errors that occur on this constructor are reported
+     * via mConstructedOK data member of this class.
+     */
+    VirtualCameraFactory();
 
     /*
-   * Contains declaration of a class VirtualCameraFactory that manages cameras
-   * available for the emulation. A global instance of this class is statically
-   * instantiated and initialized when camera emulation HAL is loaded.
-   */
+     * Destructs VirtualCameraFactory instance.
+     */
+    ~VirtualCameraFactory();
+
+public:
+    /****************************************************************************
+     * Camera HAL API handlers.
+     ***************************************************************************/
 
     /*
-   * Class VirtualCameraFactoryManages cameras available for the emulation.
-   *
-   * When the global static instance of this class is created on the module load,
-   * it enumerates cameras available for the emulation by connecting to the
-   * emulator's 'camera' service. For every camera found out there it creates an
-   * instance of an appropriate class, and stores it an in array of virtual
-   * cameras. In addition to the cameras reported by the emulator, a fake camera
-   * emulator is always created, so there is always at least one camera that is
-   * available.
-   *
-   * Instance of this class is also used as the entry point for the camera HAL API,
-   * including:
-   *  - hw_module_methods_t::open entry point
-   *  - camera_module_t::get_number_of_cameras entry point
-   *  - camera_module_t::get_camera_info entry point
-   *
-   */
-    class VirtualCameraFactory
-    {
-    public:
-        /*
-         * Constructs VirtualCameraFactory instance.
-         * In this constructor the factory will create and initialize a list of
-         * virtual cameras. All errors that occur on this constructor are reported
-         * via mConstructedOK data member of this class.
-         */
-        VirtualCameraFactory();
+     * Opens (connects to) a camera device.
+     *
+     * This method is called in response to hw_module_methods_t::open callback.
+     */
+    int cameraDeviceOpen(int camera_id, hw_device_t **device);
 
-        /*
-         * Destructs VirtualCameraFactory instance.
-         */
-        ~VirtualCameraFactory();
+    /*
+     * Gets virtual camera information.
+     *
+     * This method is called in response to camera_module_t::get_camera_info
+     * callback.
+     */
+    int getCameraInfo(int camera_id, struct camera_info *info);
 
-    public:
-        /****************************************************************************
-          * Camera HAL API handlers.
-          ***************************************************************************/
+    /*
+     * Sets virtual camera callbacks.
+     *
+     * This method is called in response to camera_module_t::set_callbacks
+     * callback.
+     */
+    int setCallbacks(const camera_module_callbacks_t *callbacks);
 
-        /*
-         * Opens (connects to) a camera device.
-         *
-         * This method is called in response to hw_module_methods_t::open callback.
-         */
-        int cameraDeviceOpen(int camera_id, hw_device_t **device);
+    /*
+     * Fill in vendor tags for the module.
+     *
+     * This method is called in response to camera_module_t::get_vendor_tag_ops
+     * callback.
+     */
+    void getVendorTagOps(vendor_tag_ops_t *ops);
 
-        /*
-         * Gets virtual camera information.
-         *
-         * This method is called in response to camera_module_t::get_camera_info
-         * callback.
-         */
-        int getCameraInfo(int camera_id, struct camera_info *info);
+public:
+    /****************************************************************************
+     * Camera HAL API callbacks.
+     ***************************************************************************/
 
-        /*
-         * Sets virtual camera callbacks.
-         *
-         * This method is called in response to camera_module_t::set_callbacks
-         * callback.
-         */
-        int setCallbacks(const camera_module_callbacks_t *callbacks);
+    /*
+     * camera_module_t::get_number_of_cameras callback entry point.
+     */
+    static int get_number_of_cameras(void);
 
-        /*
-         * Fill in vendor tags for the module.
-         *
-         * This method is called in response to camera_module_t::get_vendor_tag_ops
-         * callback.
-         */
-        void getVendorTagOps(vendor_tag_ops_t *ops);
+    /*
+     * camera_module_t::get_camera_info callback entry point.
+     */
+    static int get_camera_info(int camera_id, struct camera_info *info);
 
-    public:
-        /****************************************************************************
-          * Camera HAL API callbacks.
-          ***************************************************************************/
+    /*
+     * camera_module_t::set_callbacks callback entry point.
+     */
+    static int set_callbacks(const camera_module_callbacks_t *callbacks);
 
-        /*
-         * camera_module_t::get_number_of_cameras callback entry point.
-         */
-        static int get_number_of_cameras(void);
+    /*
+     * camera_module_t::get_vendor_tag_ops callback entry point.
+     */
+    static void get_vendor_tag_ops(vendor_tag_ops_t *ops);
 
-        /*
-         * camera_module_t::get_camera_info callback entry point.
-         */
-        static int get_camera_info(int camera_id, struct camera_info *info);
+    /*
+     * camera_module_t::open_legacy callback entry point.
+     */
+    static int open_legacy(const struct hw_module_t *module, const char *id, uint32_t halVersion,
+                           struct hw_device_t **device);
 
-        /*
-         * camera_module_t::set_callbacks callback entry point.
-         */
-        static int set_callbacks(const camera_module_callbacks_t *callbacks);
+private:
+    /*
+     * hw_module_methods_t::open callback entry point.
+     */
+    static int device_open(const hw_module_t *module, const char *name, hw_device_t **device);
 
-        /*
-         * camera_module_t::get_vendor_tag_ops callback entry point.
-         */
-        static void get_vendor_tag_ops(vendor_tag_ops_t *ops);
+public:
+    /****************************************************************************
+     * Public API.
+     ***************************************************************************/
 
-        /*
-         * camera_module_t::open_legacy callback entry point.
-         */
-        static int open_legacy(const struct hw_module_t *module, const char *id,
-                               uint32_t halVersion, struct hw_device_t **device);
+    /*
+     * Gets fake camera orientation.
+     */
+    int getFakeCameraOrientation() {
+        const char *key = "remote.camera.fake.orientation";
+        int degree = property_get_int32(key, 90);
+        return degree;
+    }
 
-    private:
-        /*
-         * hw_module_methods_t::open callback entry point.
-         */
-        static int device_open(const hw_module_t *module, const char *name,
-                               hw_device_t **device);
+    /*
+     * Gets remote camera orientation.
+     */
+    int getRemoteCameraOrientation() {
+        const char *key = "remote.camera.webcam.orientation";
+        int degree = property_get_int32(key, 90);
+        return degree;
+    }
 
-    public:
-        /****************************************************************************
-          * Public API.
-          ***************************************************************************/
+    /*
+     * Gets number of virtual cameras.
+     */
+    int getVirtualCameraNum() const { return mVirtualCameraNum; }
 
-        /*
-         * Gets fake camera orientation.
-         */
-        int getFakeCameraOrientation()
-        {
-            const char *key = "remote.camera.fake.orientation";
-            int degree = property_get_int32(key, 90);
-            return degree;
-        }
+    int getSocketFd() { return mSocketFdHandle; }
 
-        /*
-         * Gets remote camera orientation.
-         */
-        int getRemoteCameraOrientation()
-        {
-            const char *key = "remote.camera.webcam.orientation";
-            int degree = property_get_int32(key, 90);
-            return degree;
-        }
+    void setSocketFd(int fd) { mSocketFdHandle = fd; }
 
-        /*
-         * Gets number of virtual cameras.
-         */
-        int getVirtualCameraNum() const
-        {
-            return mVirtualCameraNum;
-        }
-        
-	int getSocketFd() 
-        {
-            return mSocketFdHandle;
-        }
-	
-	void setSocketFd(int fd) 
-        {
-             mSocketFdHandle = fd;
-        }
-	
-	bool IsClientClosed()
-	{
-		return mClientAvailable;	
-	}
-	void setClientAvailability(bool status)
-	{
-		mClientAvailable = status;
-	}
-        /*
-         * Checks whether or not the constructor has succeeded.
-         */
-        bool isConstructedOK() const
-        {
-            return mConstructedOK;
-        }
+    bool IsClientClosed() { return mClientAvailable; }
+    void setClientAvailability(bool status) { mClientAvailable = status; }
+    /*
+     * Checks whether or not the constructor has succeeded.
+     */
+    bool isConstructedOK() const { return mConstructedOK; }
 
-        void onStatusChanged(int cameraId, int newStatus);
+    void onStatusChanged(int cameraId, int newStatus);
 
-    private:
-        /****************************************************************************
-          * Private API
-          ***************************************************************************/
+private:
+    /****************************************************************************
+     * Private API
+     ***************************************************************************/
 
-        // For carrying REMOTE camera information between methods.
-        struct RemoteCameraInfo
-        {
-            char *name;
-            char *frameDims;
-            char *dir;
-        };
-
-        /*
-         * Args:
-         *     token: token whose value is being searched for.
-         *     s: string containing one or more tokens in the format
-         *        "token_name=token_value".
-         *     value: Output parameter for the value of the token.
-         *
-         * Returns:
-         *     true if the token was successfully parsed.
-         */
-        bool getTokenValue(const char *token, const std::string &s, char **value);
-
-        /*
-         * Args:
-         *     remoteCameras: Output parameter for the list of detected camera
-         *                  strings. Each camera is represented by a string of three
-         *                  attributes "name=... framedims=... dir=...", not
-         *                  necessarily in that order.
-         */
-        void findRemoteCameras(std::vector<RemoteCameraInfo> *remoteCameras);
-
-        /*
-         * Populates virtual cameras array with cameras that are available via
-         * 'camera' service in the emulator. For each such camera, one of the
-         * VirtualRemoteCamera* classes will be created and added to
-         * mVirtualCameras (based on the HAL version specified in system
-         * properties).
-         */
-        void createRemoteCameras(const std::vector<RemoteCameraInfo> &remoteCameras);
-
-        /*
-         * Creates a fake camera and adds it to mVirtualCameras. If backCamera is
-         * true, it will be created as if it were a camera on the back of the phone.
-         * Otherwise, it will be front-facing.
-         */
-        void createFakeCamera(bool backCamera);
-
-        /*
-         * Waits till remote-props has done setup, timeout after 500ms.
-         */
-        void waitForRemoteSfFakeCameraPropertyAvailable();
-
-        /*
-         * Checks if fake camera emulation is on for the camera facing back.
-         */
-        bool isFakeCameraEmulationOn(bool backCamera);
-
-        /*
-         * Gets camera device version number to use for back camera emulation.
-         */
-        int getCameraHalVersion(bool backCamera);
-
-    private:
-        /****************************************************************************
-          * Data members.
-          ***************************************************************************/
-
-        // Connection to the camera service in the emulator.
-        FactoryRemoteClient mRemoteClient;
-
-        // Array of cameras available for the emulation.
-        VirtualBaseCamera **mVirtualCameras;
-
-        // Number of virtual cameras (including the fake ones).
-        int mVirtualCameraNum;
-
-        // Number of virtual fake cameras.
-        int mFakeCameraNum;
-	
-	//socketFD handle
-	int mSocketFdHandle;
-
-	//flag to know weather client closed
-	bool mClientAvailable = true;
-
-        // Flags whether or not constructor has succeeded.
-        bool mConstructedOK;
-
-        // Camera callbacks (for status changing).
-        const camera_module_callbacks_t *mCallbacks;
-
-        // Hotplug thread (to call onStatusChanged).
-        sp<VirtualCameraHotplugThread> mHotplugThread;
-
-    public:
-        // Contains device open entry point, as required by HAL API.
-        static struct hw_module_methods_t mCameraModuleMethods;
-
-    public:
-        bool createSocketServer();
-        void cameraClientConnect(int socketFd);
-        void cameraClientDisconnect(int socketFd);
-        int trySwitchRemoteCamera(int curCameraId);
-
-    private:
-        sp<CameraSocketServerThread> mCSST;
+    // For carrying REMOTE camera information between methods.
+    struct RemoteCameraInfo {
+        char *name;
+        char *frameDims;
+        char *dir;
     };
 
-}; // end of namespace android
+    /*
+     * Args:
+     *     token: token whose value is being searched for.
+     *     s: string containing one or more tokens in the format
+     *        "token_name=token_value".
+     *     value: Output parameter for the value of the token.
+     *
+     * Returns:
+     *     true if the token was successfully parsed.
+     */
+    bool getTokenValue(const char *token, const std::string &s, char **value);
+
+    /*
+     * Args:
+     *     remoteCameras: Output parameter for the list of detected camera
+     *                  strings. Each camera is represented by a string of three
+     *                  attributes "name=... framedims=... dir=...", not
+     *                  necessarily in that order.
+     */
+    void findRemoteCameras(std::vector<RemoteCameraInfo> *remoteCameras);
+
+    /*
+     * Populates virtual cameras array with cameras that are available via
+     * 'camera' service in the emulator. For each such camera, one of the
+     * VirtualRemoteCamera* classes will be created and added to
+     * mVirtualCameras (based on the HAL version specified in system
+     * properties).
+     */
+    void createRemoteCameras(const std::vector<RemoteCameraInfo> &remoteCameras);
+
+    /*
+     * Creates a fake camera and adds it to mVirtualCameras. If backCamera is
+     * true, it will be created as if it were a camera on the back of the phone.
+     * Otherwise, it will be front-facing.
+     */
+    void createFakeCamera(bool backCamera);
+
+    /*
+     * Waits till remote-props has done setup, timeout after 500ms.
+     */
+    void waitForRemoteSfFakeCameraPropertyAvailable();
+
+    /*
+     * Checks if fake camera emulation is on for the camera facing back.
+     */
+    bool isFakeCameraEmulationOn(bool backCamera);
+
+    /*
+     * Gets camera device version number to use for back camera emulation.
+     */
+    int getCameraHalVersion(bool backCamera);
+
+private:
+    /****************************************************************************
+     * Data members.
+     ***************************************************************************/
+
+    // Connection to the camera service in the emulator.
+    FactoryRemoteClient mRemoteClient;
+
+    // Array of cameras available for the emulation.
+    VirtualBaseCamera **mVirtualCameras;
+
+    // Number of virtual cameras (including the fake ones).
+    int mVirtualCameraNum;
+
+    // Number of virtual fake cameras.
+    int mFakeCameraNum;
+
+    // socketFD handle
+    int mSocketFdHandle;
+
+    // flag to know weather client closed
+    bool mClientAvailable = true;
+
+    // Flags whether or not constructor has succeeded.
+    bool mConstructedOK;
+
+    // Camera callbacks (for status changing).
+    const camera_module_callbacks_t *mCallbacks;
+
+    // Hotplug thread (to call onStatusChanged).
+    sp<VirtualCameraHotplugThread> mHotplugThread;
+
+public:
+    // Contains device open entry point, as required by HAL API.
+    static struct hw_module_methods_t mCameraModuleMethods;
+
+public:
+    bool createSocketServer();
+    void cameraClientConnect(int socketFd);
+    void cameraClientDisconnect(int socketFd);
+    int trySwitchRemoteCamera(int curCameraId);
+
+private:
+    sp<CameraSocketServerThread> mCSST;
+};
+
+};  // end of namespace android
 
 // References the global VirtualCameraFactory instance.
 extern android::VirtualCameraFactory gVirtualCameraFactory;
 
-#endif // HW_EMULATOR_CAMERA_VIRTUALD_CAMERA_FACTORY_H
+#endif  // HW_EMULATOR_CAMERA_VIRTUALD_CAMERA_FACTORY_H

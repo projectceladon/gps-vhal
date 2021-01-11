@@ -19,8 +19,7 @@
 
 #include <setjmp.h>
 #include <stdlib.h>
-extern "C"
-{
+extern "C" {
 #include <jpeglib.h>
 #include <jerror.h>
 }
@@ -30,8 +29,7 @@ extern "C"
 struct _ExifData;
 typedef _ExifData ExifData;
 
-class Compressor
-{
+class Compressor {
 public:
     Compressor();
 
@@ -39,8 +37,7 @@ public:
      * |width| * |height|. |exifData| is optional EXIF data that will be
      * attached to the compressed data if present, set to null if not needed.
      */
-    bool compress(const unsigned char *data,
-                  int width, int height, int quality,
+    bool compress(const unsigned char *data, int width, int height, int quality,
                   ExifData *exifData);
 
     /* Get a reference to the compressed data, this will return an empty vector
@@ -49,8 +46,7 @@ public:
     const std::vector<unsigned char> &getCompressedData() const;
 
 private:
-    struct DestinationManager : jpeg_destination_mgr
-    {
+    struct DestinationManager : jpeg_destination_mgr {
         DestinationManager();
 
         static void initDestination(j_compress_ptr cinfo);
@@ -59,8 +55,7 @@ private:
 
         std::vector<unsigned char> mBuffer;
     };
-    struct ErrorManager : jpeg_error_mgr
-    {
+    struct ErrorManager : jpeg_error_mgr {
         ErrorManager();
 
         static void onJpegError(j_common_ptr cinfo);
@@ -77,4 +72,4 @@ private:
     bool attachExifData(ExifData *exifData);
 };
 
-#endif // GOLDFISH_CAMERA_JPEG_STUB_COMPRESSOR_H
+#endif  // GOLDFISH_CAMERA_JPEG_STUB_COMPRESSOR_H

@@ -26,72 +26,60 @@
 #include <dlfcn.h>
 #include "JpegCompressor.h"
 
-namespace android
-{
+namespace android {
 
-    void *NV21JpegCompressor::mDl = NULL;
+void *NV21JpegCompressor::mDl = NULL;
 
-    static void *getSymbol(void *dl, const char *signature)
-    {
-        void *res = dlsym(dl, signature);
-        assert(res != NULL);
+static void *getSymbol(void *dl, const char *signature) {
+    void *res = dlsym(dl, signature);
+    assert(res != NULL);
 
-        return res;
+    return res;
+}
+
+typedef void (*InitFunc)(JpegStub *stub);
+typedef void (*CleanupFunc)(JpegStub *stub);
+typedef int (*CompressFunc)(JpegStub *stub, const void *image, int width, int height, int quality,
+                            ExifData *exifData);
+typedef void (*GetCompressedImageFunc)(JpegStub *stub, void *buff);
+typedef size_t (*GetCompressedSizeFunc)(JpegStub *stub);
+
+NV21JpegCompressor::NV21JpegCompressor() {
+    const char dlName[] = "/vendor/lib/hw/camera.cic_cloud.jpeg.so";
+    if (mDl == NULL) {
+        mDl = dlopen(dlName, RTLD_NOW);
     }
+    assert(mDl != NULL);
 
-    typedef void (*InitFunc)(JpegStub *stub);
-    typedef void (*CleanupFunc)(JpegStub *stub);
-    typedef int (*CompressFunc)(JpegStub *stub, const void *image,
-                                int width, int height, int quality, ExifData *exifData);
-    typedef void (*GetCompressedImageFunc)(JpegStub *stub, void *buff);
-    typedef size_t (*GetCompressedSizeFunc)(JpegStub *stub);
+    InitFunc f = (InitFunc)getSymbol(mDl, "JpegStub_init");
+    (*f)(&mStub);
+}
 
-    NV21JpegCompressor::NV21JpegCompressor()
-    {
-        const char dlName[] = "/vendor/lib/hw/camera.cic_cloud.jpeg.so";
-        if (mDl == NULL)
-        {
-            mDl = dlopen(dlName, RTLD_NOW);
-        }
-        assert(mDl != NULL);
+NV21JpegCompressor::~NV21JpegCompressor() {
+    CleanupFunc f = (CleanupFunc)getSymbol(mDl, "JpegStub_cleanup");
+    (*f)(&mStub);
+}
 
-        InitFunc f = (InitFunc)getSymbol(mDl, "JpegStub_init");
-        (*f)(&mStub);
-    }
+/****************************************************************************
+ * Public API
+ ***************************************************************************/
 
-    NV21JpegCompressor::~NV21JpegCompressor()
-    {
-        CleanupFunc f = (CleanupFunc)getSymbol(mDl, "JpegStub_cleanup");
-        (*f)(&mStub);
-    }
+status_t NV21JpegCompressor::compressRawImage(const void *image, int width, int height, int quality,
+                                              ExifData *exifData) {
+    CompressFunc f = (CompressFunc)getSymbol(mDl, "JpegStub_compress");
 
-    /****************************************************************************
-     * Public API
-     ***************************************************************************/
+    return (status_t)(*f)(&mStub, image, width, height, quality, exifData);
+}
 
-    status_t NV21JpegCompressor::compressRawImage(const void *image,
-                                                  int width,
-                                                  int height,
-                                                  int quality,
-                                                  ExifData *exifData)
-    {
-        CompressFunc f = (CompressFunc)getSymbol(mDl, "JpegStub_compress");
+size_t NV21JpegCompressor::getCompressedSize() {
+    GetCompressedSizeFunc f = (GetCompressedSizeFunc)getSymbol(mDl, "JpegStub_getCompressedSize");
+    return (*f)(&mStub);
+}
 
-        return (status_t)(*f)(&mStub, image, width, height, quality, exifData);
-    }
-
-    size_t NV21JpegCompressor::getCompressedSize()
-    {
-        GetCompressedSizeFunc f = (GetCompressedSizeFunc)getSymbol(mDl,
-                                                                   "JpegStub_getCompressedSize");
-        return (*f)(&mStub);
-    }
-
-    void NV21JpegCompressor::getCompressedImage(void *buff)
-    {
-        GetCompressedImageFunc f = (GetCompressedImageFunc)getSymbol(mDl,
-                                                                     "JpegStub_getCompressedImage");
-        (*f)(&mStub, buff);
-    }
+void NV21JpegCompressor::getCompressedImage(void *buff) {
+    GetCompressedImageFunc f =
+        (GetCompressedImageFunc)getSymbol(mDl, "JpegStub_getCompressedImage");
+    (*f)(&mStub, buff);
+}
 
 }; /* namespace android */

@@ -26,186 +26,153 @@
 #include "PreviewWindow.h"
 #include "GrallocModule.h"
 
-namespace android
-{
+namespace android {
 
-    PreviewWindow::PreviewWindow()
-        : mPreviewWindow(NULL),
-          mPreviewFrameWidth(0),
-          mPreviewFrameHeight(0),
-          mPreviewEnabled(false)
-    {
-    }
+PreviewWindow::PreviewWindow()
+    : mPreviewWindow(NULL), mPreviewFrameWidth(0), mPreviewFrameHeight(0), mPreviewEnabled(false) {}
 
-    PreviewWindow::~PreviewWindow()
-    {
-    }
+PreviewWindow::~PreviewWindow() {}
 
-    /****************************************************************************
-     * Camera API
-     ***************************************************************************/
+/****************************************************************************
+ * Camera API
+ ***************************************************************************/
 
-    status_t PreviewWindow::setPreviewWindow(struct preview_stream_ops *window,
-                                             int preview_fps)
-    {
-        ALOGV("%s: current: %p -> new: %p", __FUNCTION__, mPreviewWindow, window);
+status_t PreviewWindow::setPreviewWindow(struct preview_stream_ops *window, int preview_fps) {
+    ALOGV("%s: current: %p -> new: %p", __FUNCTION__, mPreviewWindow, window);
 
-        status_t res = NO_ERROR;
-        Mutex::Autolock locker(&mObjectLock);
+    status_t res = NO_ERROR;
+    Mutex::Autolock locker(&mObjectLock);
 
-        /* Reset preview info. */
-        mPreviewFrameWidth = mPreviewFrameHeight = 0;
+    /* Reset preview info. */
+    mPreviewFrameWidth = mPreviewFrameHeight = 0;
 
-        if (window != NULL)
-        {
-            /* The CPU will write each frame to the preview window buffer.
-            * Note that we delay setting preview window buffer geometry until
-            * frames start to come in. */
-            res = window->set_usage(window, GRALLOC_USAGE_SW_WRITE_OFTEN);
-            if (res != NO_ERROR)
-            {
-                window = NULL;
-                res = -res; // set_usage returns a negative errno.
-                ALOGE("%s: Error setting preview window usage %d -> %s",
-                      __FUNCTION__, res, strerror(res));
-            }
+    if (window != NULL) {
+        /* The CPU will write each frame to the preview window buffer.
+         * Note that we delay setting preview window buffer geometry until
+         * frames start to come in. */
+        res = window->set_usage(window, GRALLOC_USAGE_SW_WRITE_OFTEN);
+        if (res != NO_ERROR) {
+            window = NULL;
+            res = -res;  // set_usage returns a negative errno.
+            ALOGE("%s: Error setting preview window usage %d -> %s", __FUNCTION__, res,
+                  strerror(res));
         }
-        mPreviewWindow = window;
+    }
+    mPreviewWindow = window;
 
-        return res;
+    return res;
+}
+
+status_t PreviewWindow::startPreview() {
+    ALOGV("%s", __FUNCTION__);
+
+    Mutex::Autolock locker(&mObjectLock);
+    mPreviewEnabled = true;
+
+    return NO_ERROR;
+}
+
+void PreviewWindow::stopPreview() {
+    ALOGV("%s", __FUNCTION__);
+
+    Mutex::Autolock locker(&mObjectLock);
+    mPreviewEnabled = false;
+}
+
+/****************************************************************************
+ * Public API
+ ***************************************************************************/
+
+void PreviewWindow::onNextFrameAvailable(nsecs_t timestamp, VirtualCameraDevice *camera_dev) {
+    int res;
+    Mutex::Autolock locker(&mObjectLock);
+
+    if (!isPreviewEnabled() || mPreviewWindow == NULL) {
+        return;
     }
 
-    status_t PreviewWindow::startPreview()
-    {
-        ALOGV("%s", __FUNCTION__);
-
-        Mutex::Autolock locker(&mObjectLock);
-        mPreviewEnabled = true;
-
-        return NO_ERROR;
-    }
-
-    void PreviewWindow::stopPreview()
-    {
-        ALOGV("%s", __FUNCTION__);
-
-        Mutex::Autolock locker(&mObjectLock);
-        mPreviewEnabled = false;
-    }
-
-    /****************************************************************************
-     * Public API
-     ***************************************************************************/
-
-    void PreviewWindow::onNextFrameAvailable(nsecs_t timestamp,
-                                             VirtualCameraDevice *camera_dev)
-    {
-        int res;
-        Mutex::Autolock locker(&mObjectLock);
-
-        if (!isPreviewEnabled() || mPreviewWindow == NULL)
-        {
+    /* Make sure that preview window dimensions are OK with the camera device */
+    if (adjustPreviewDimensions(camera_dev)) {
+        /* Need to set / adjust buffer geometry for the preview window.
+         * Note that in the emulator preview window uses only RGB for pixel
+         * formats. */
+        ALOGV("%s: Adjusting preview windows %p geometry to %dx%d", __FUNCTION__, mPreviewWindow,
+              mPreviewFrameWidth, mPreviewFrameHeight);
+        res = mPreviewWindow->set_buffers_geometry(mPreviewWindow, mPreviewFrameWidth,
+                                                   mPreviewFrameHeight, HAL_PIXEL_FORMAT_RGBA_8888);
+        if (res != NO_ERROR) {
+            ALOGE("%s: Error in set_buffers_geometry %d -> %s", __FUNCTION__, -res, strerror(-res));
             return;
         }
-
-        /* Make sure that preview window dimensions are OK with the camera device */
-        if (adjustPreviewDimensions(camera_dev))
-        {
-            /* Need to set / adjust buffer geometry for the preview window.
-            * Note that in the emulator preview window uses only RGB for pixel
-            * formats. */
-            ALOGV("%s: Adjusting preview windows %p geometry to %dx%d",
-                  __FUNCTION__, mPreviewWindow, mPreviewFrameWidth,
-                  mPreviewFrameHeight);
-            res = mPreviewWindow->set_buffers_geometry(mPreviewWindow,
-                                                       mPreviewFrameWidth,
-                                                       mPreviewFrameHeight,
-                                                       HAL_PIXEL_FORMAT_RGBA_8888);
-            if (res != NO_ERROR)
-            {
-                ALOGE("%s: Error in set_buffers_geometry %d -> %s",
-                      __FUNCTION__, -res, strerror(-res));
-                return;
-            }
-        }
-
-        /*
-        * Push new frame to the preview window.
-        */
-
-        /* Dequeue preview window buffer for the frame. */
-        buffer_handle_t *buffer = NULL;
-        int stride = 0;
-        res = mPreviewWindow->dequeue_buffer(mPreviewWindow, &buffer, &stride);
-        if (res != NO_ERROR || buffer == NULL)
-        {
-            ALOGE("%s: Unable to dequeue preview window buffer: %d -> %s",
-                  __FUNCTION__, -res, strerror(-res));
-            return;
-        }
-
-        /* Let the preview window to lock the buffer. */
-        res = mPreviewWindow->lock_buffer(mPreviewWindow, buffer);
-        if (res != NO_ERROR)
-        {
-            ALOGE("%s: Unable to lock preview window buffer: %d -> %s",
-                  __FUNCTION__, -res, strerror(-res));
-            mPreviewWindow->cancel_buffer(mPreviewWindow, buffer);
-            return;
-        }
-
-        /* Now let the graphics framework to lock the buffer, and provide
-        * us with the framebuffer data address. */
-        void *img = NULL;
-        res = GrallocModule::getInstance().lock(
-            *buffer, GRALLOC_USAGE_SW_WRITE_OFTEN,
-            0, 0, mPreviewFrameWidth, mPreviewFrameHeight, &img);
-        if (res != NO_ERROR)
-        {
-            ALOGE("%s: gralloc.lock failure: %d -> %s",
-                  __FUNCTION__, res, strerror(res));
-            mPreviewWindow->cancel_buffer(mPreviewWindow, buffer);
-            return;
-        }
-
-        int64_t frame_timestamp = 0L;
-        /* Frames come in in YV12/NV12/NV21 format. Since preview window doesn't
-        * supports those formats, we need to obtain the frame in RGB565. */
-        res = camera_dev->getCurrentPreviewFrame(img, &frame_timestamp);
-        if (res == NO_ERROR)
-        {
-            /* Show it. */
-            mPreviewWindow->set_timestamp(mPreviewWindow,
-                                          frame_timestamp != 0L ? frame_timestamp : timestamp);
-            mPreviewWindow->enqueue_buffer(mPreviewWindow, buffer);
-        }
-        else
-        {
-            ALOGE("%s: Unable to obtain preview frame: %d", __FUNCTION__, res);
-            mPreviewWindow->cancel_buffer(mPreviewWindow, buffer);
-        }
-        GrallocModule::getInstance().unlock(*buffer);
     }
 
-    /***************************************************************************
-     * Private API
-     **************************************************************************/
+    /*
+     * Push new frame to the preview window.
+     */
 
-    bool PreviewWindow::adjustPreviewDimensions(VirtualCameraDevice *camera_dev)
-    {
-        /* Match the cached frame dimensions against the actual ones. */
-        if (mPreviewFrameWidth == camera_dev->getFrameWidth() &&
-            mPreviewFrameHeight == camera_dev->getFrameHeight())
-        {
-            /* They match. */
-            return false;
-        }
-
-        /* They don't match: adjust the cache. */
-        mPreviewFrameWidth = camera_dev->getFrameWidth();
-        mPreviewFrameHeight = camera_dev->getFrameHeight();
-
-        return true;
+    /* Dequeue preview window buffer for the frame. */
+    buffer_handle_t *buffer = NULL;
+    int stride = 0;
+    res = mPreviewWindow->dequeue_buffer(mPreviewWindow, &buffer, &stride);
+    if (res != NO_ERROR || buffer == NULL) {
+        ALOGE("%s: Unable to dequeue preview window buffer: %d -> %s", __FUNCTION__, -res,
+              strerror(-res));
+        return;
     }
+
+    /* Let the preview window to lock the buffer. */
+    res = mPreviewWindow->lock_buffer(mPreviewWindow, buffer);
+    if (res != NO_ERROR) {
+        ALOGE("%s: Unable to lock preview window buffer: %d -> %s", __FUNCTION__, -res,
+              strerror(-res));
+        mPreviewWindow->cancel_buffer(mPreviewWindow, buffer);
+        return;
+    }
+
+    /* Now let the graphics framework to lock the buffer, and provide
+     * us with the framebuffer data address. */
+    void *img = NULL;
+    res = GrallocModule::getInstance().lock(*buffer, GRALLOC_USAGE_SW_WRITE_OFTEN, 0, 0,
+                                            mPreviewFrameWidth, mPreviewFrameHeight, &img);
+    if (res != NO_ERROR) {
+        ALOGE("%s: gralloc.lock failure: %d -> %s", __FUNCTION__, res, strerror(res));
+        mPreviewWindow->cancel_buffer(mPreviewWindow, buffer);
+        return;
+    }
+
+    int64_t frame_timestamp = 0L;
+    /* Frames come in in YV12/NV12/NV21 format. Since preview window doesn't
+     * supports those formats, we need to obtain the frame in RGB565. */
+    res = camera_dev->getCurrentPreviewFrame(img, &frame_timestamp);
+    if (res == NO_ERROR) {
+        /* Show it. */
+        mPreviewWindow->set_timestamp(mPreviewWindow,
+                                      frame_timestamp != 0L ? frame_timestamp : timestamp);
+        mPreviewWindow->enqueue_buffer(mPreviewWindow, buffer);
+    } else {
+        ALOGE("%s: Unable to obtain preview frame: %d", __FUNCTION__, res);
+        mPreviewWindow->cancel_buffer(mPreviewWindow, buffer);
+    }
+    GrallocModule::getInstance().unlock(*buffer);
+}
+
+/***************************************************************************
+ * Private API
+ **************************************************************************/
+
+bool PreviewWindow::adjustPreviewDimensions(VirtualCameraDevice *camera_dev) {
+    /* Match the cached frame dimensions against the actual ones. */
+    if (mPreviewFrameWidth == camera_dev->getFrameWidth() &&
+        mPreviewFrameHeight == camera_dev->getFrameHeight()) {
+        /* They match. */
+        return false;
+    }
+
+    /* They don't match: adjust the cache. */
+    mPreviewFrameWidth = camera_dev->getFrameWidth();
+    mPreviewFrameHeight = camera_dev->getFrameHeight();
+
+    return true;
+}
 
 }; /* namespace android */

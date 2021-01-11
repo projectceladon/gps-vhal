@@ -25,43 +25,39 @@
 #include <hardware/camera2.h>
 #include <utils/Vector.h>
 
-namespace android
-{
+namespace android {
 
-    /* Internal structure for passing buffers across threads */
-    struct StreamBuffer
-    {
-        // Positive numbers are output streams
-        // Negative numbers are input reprocess streams
-        // Zero is an auxillary buffer
-        int streamId;
-        uint32_t width, height;
-        uint32_t format;
-        uint32_t dataSpace;
-        uint32_t stride;
-        buffer_handle_t *buffer;
-        uint8_t *img;
-    };
-    typedef Vector<StreamBuffer> Buffers;
+/* Internal structure for passing buffers across threads */
+struct StreamBuffer {
+    // Positive numbers are output streams
+    // Negative numbers are input reprocess streams
+    // Zero is an auxillary buffer
+    int streamId;
+    uint32_t width, height;
+    uint32_t format;
+    uint32_t dataSpace;
+    uint32_t stride;
+    buffer_handle_t *buffer;
+    uint8_t *img;
+};
+typedef Vector<StreamBuffer> Buffers;
 
-    struct Stream
-    {
-        const camera2_stream_ops_t *ops;
-        uint32_t width, height;
-        int32_t format;
-        uint32_t stride;
-    };
+struct Stream {
+    const camera2_stream_ops_t *ops;
+    uint32_t width, height;
+    int32_t format;
+    uint32_t stride;
+};
 
-    struct ReprocessStream
-    {
-        const camera2_stream_in_ops_t *ops;
-        uint32_t width, height;
-        int32_t format;
-        uint32_t stride;
-        // -1 if the reprocessing stream is independent
-        int32_t sourceStreamId;
-    };
+struct ReprocessStream {
+    const camera2_stream_in_ops_t *ops;
+    uint32_t width, height;
+    int32_t format;
+    uint32_t stride;
+    // -1 if the reprocessing stream is independent
+    int32_t sourceStreamId;
+};
 
-} // namespace android
+}  // namespace android
 
 #endif

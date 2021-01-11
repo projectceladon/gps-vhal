@@ -22,23 +22,17 @@
 struct _ExifData;
 typedef _ExifData ExifData;
 
-extern "C"
-{
+extern "C" {
 
-    struct JpegStub
-    {
-        void *mCompressor;
-    };
-
-    void JpegStub_init(JpegStub *stub);
-    void JpegStub_cleanup(JpegStub *stub);
-    int JpegStub_compress(JpegStub *stub,
-                          const void *image,
-                          int width,
-                          int height,
-                          int quality,
-                          ExifData *exifData);
-    void JpegStub_getCompressedImage(JpegStub *stub, void *buff);
-    size_t JpegStub_getCompressedSize(JpegStub *stub);
+struct JpegStub {
+    void *mCompressor;
 };
-#endif // JPEGSTUB_H_
+
+void JpegStub_init(JpegStub *stub);
+void JpegStub_cleanup(JpegStub *stub);
+int JpegStub_compress(JpegStub *stub, const void *image, int width, int height, int quality,
+                      ExifData *exifData);
+void JpegStub_getCompressedImage(JpegStub *stub, void *buff);
+size_t JpegStub_getCompressedSize(JpegStub *stub);
+};
+#endif  // JPEGSTUB_H_

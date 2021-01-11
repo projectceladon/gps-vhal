@@ -19,7 +19,7 @@
  * functionality of a fake camera.
  */
 
- #define LOG_NDEBUG 1
+#define LOG_NDEBUG 1
 #define LOG_TAG "VirtualCamera_FakeCamera"
 #include <log/log.h>
 #include <cutils/properties.h>
@@ -28,87 +28,65 @@
 #include "VirtualFakeCameraDevice.h"
 #include "VirtualFakeRotatingCameraDevice.h"
 
-namespace android
-{
+namespace android {
 
-    VirtualFakeCamera::VirtualFakeCamera(int cameraId,
-                                         bool facingBack,
-                                         struct hw_module_t *module)
-        : VirtualCamera(cameraId, module),
-          mFacingBack(facingBack),
-          mFakeCameraDevice(nullptr)
-    {
-        const char *key = "ro.kernel.remote.camera.fake.rotating";
-        char prop[PROPERTY_VALUE_MAX];
-        if (property_get(key, prop, nullptr) > 0)
-        {
-            mFakeCameraDevice = new VirtualFakeRotatingCameraDevice(this);
-        }
-        else
-        {
-            mFakeCameraDevice = new VirtualFakeCameraDevice(this);
-        }
+VirtualFakeCamera::VirtualFakeCamera(int cameraId, bool facingBack, struct hw_module_t *module)
+    : VirtualCamera(cameraId, module), mFacingBack(facingBack), mFakeCameraDevice(nullptr) {
+    const char *key = "ro.kernel.remote.camera.fake.rotating";
+    char prop[PROPERTY_VALUE_MAX];
+    if (property_get(key, prop, nullptr) > 0) {
+        mFakeCameraDevice = new VirtualFakeRotatingCameraDevice(this);
+    } else {
+        mFakeCameraDevice = new VirtualFakeCameraDevice(this);
+    }
+}
+
+VirtualFakeCamera::~VirtualFakeCamera() { delete mFakeCameraDevice; }
+
+/****************************************************************************
+ * Public API overrides
+ ***************************************************************************/
+
+status_t VirtualFakeCamera::Initialize(const char *device_name, const char *frame_dims,
+                                       const char *facing_dir) {
+    status_t res = mFakeCameraDevice->Initialize(device_name);
+    if (res != NO_ERROR) {
+        return res;
     }
 
-    VirtualFakeCamera::~VirtualFakeCamera()
-    {
-        delete mFakeCameraDevice;
+    const char *facing = mFacingBack ? VirtualCamera::FACING_BACK : VirtualCamera::FACING_FRONT;
+
+    mParameters.set(VirtualCamera::FACING_KEY, facing);
+    ALOGE("%s: Fake camera is facing %s", __FUNCTION__, facing);
+
+    mParameters.set(VirtualCamera::ORIENTATION_KEY,
+                    gVirtualCameraFactory.getFakeCameraOrientation());
+    mParameters.set(CameraParameters::KEY_ROTATION,
+                    gVirtualCameraFactory.getFakeCameraOrientation());
+
+    res = VirtualCamera::Initialize(device_name, frame_dims, facing_dir);
+    if (res != NO_ERROR) {
+        return res;
     }
 
-    /****************************************************************************
-     * Public API overrides
-     ***************************************************************************/
+    /*
+     * Parameters provided by the camera device.
+     */
 
-    status_t VirtualFakeCamera::Initialize(const char *device_name,
-                            const char *frame_dims,
-                            const char *facing_dir)
-    {
-        status_t res = mFakeCameraDevice->Initialize(device_name);
-        if (res != NO_ERROR)
-        {
-            return res;
-        }
+    /* 352x288, 320x240 and 176x144 frame dimensions are required by
+     * the framework for video mode preview and video recording. */
+    mParameters.set(CameraParameters::KEY_SUPPORTED_PICTURE_SIZES, "640x480,352x288,320x240");
+    mParameters.set(CameraParameters::KEY_SUPPORTED_PREVIEW_SIZES,
+                    "640x480,352x288,320x240,176x144");
+    mParameters.set(CameraParameters::KEY_SUPPORTED_VIDEO_SIZES, "640x480,352x288,320x240,176x144");
+    mParameters.set(CameraParameters::KEY_PREFERRED_PREVIEW_SIZE_FOR_VIDEO, "1920x1080");
 
-        const char *facing = mFacingBack ? VirtualCamera::FACING_BACK : VirtualCamera::FACING_FRONT;
+    mParameters.setPreviewSize(1920, 1080);
+    mParameters.setPictureSize(1920, 1080);
 
-        mParameters.set(VirtualCamera::FACING_KEY, facing);
-        ALOGE("%s: Fake camera is facing %s", __FUNCTION__, facing);
+    return NO_ERROR;
+}
 
-        mParameters.set(VirtualCamera::ORIENTATION_KEY,
-                        gVirtualCameraFactory.getFakeCameraOrientation());
-        mParameters.set(CameraParameters::KEY_ROTATION,
-                        gVirtualCameraFactory.getFakeCameraOrientation());
-
-        res = VirtualCamera::Initialize(device_name, frame_dims, facing_dir);
-        if (res != NO_ERROR)
-        {
-            return res;
-        }
-
-        /*
-        * Parameters provided by the camera device.
-        */
-
-        /* 352x288, 320x240 and 176x144 frame dimensions are required by
-        * the framework for video mode preview and video recording. */
-        mParameters.set(CameraParameters::KEY_SUPPORTED_PICTURE_SIZES,
-                        "640x480,352x288,320x240");
-        mParameters.set(CameraParameters::KEY_SUPPORTED_PREVIEW_SIZES,
-                        "640x480,352x288,320x240,176x144");
-        mParameters.set(CameraParameters::KEY_SUPPORTED_VIDEO_SIZES,
-                        "640x480,352x288,320x240,176x144");
-        mParameters.set(CameraParameters::KEY_PREFERRED_PREVIEW_SIZE_FOR_VIDEO,
-                        "1920x1080");
-
-        mParameters.setPreviewSize(1920, 1080);
-        mParameters.setPictureSize(1920, 1080);
-
-        return NO_ERROR;
-    }
-
-    VirtualCameraDevice *VirtualFakeCamera::getCameraDevice()
-    {
-        return mFakeCameraDevice;
-    }
+VirtualCameraDevice *VirtualFakeCamera::getCameraDevice() { return mFakeCameraDevice; }
 
 }; /* namespace android */

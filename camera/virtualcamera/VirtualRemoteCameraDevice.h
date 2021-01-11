@@ -25,115 +25,111 @@
 #include "VirtualCameraDevice.h"
 #include "RemoteClient.h"
 
-namespace android
-{
+namespace android {
 
-    class VirtualRemoteCamera;
+class VirtualRemoteCamera;
 
-    /* Encapsulates an virtual camera device connected to the host.
-    */
-    class VirtualRemoteCameraDevice : public VirtualCameraDevice
-    {
-    public:
-        /* Constructs VirtualRemoteCameraDevice instance. */
-        explicit VirtualRemoteCameraDevice(VirtualRemoteCamera *camera_hal);
+/* Encapsulates an virtual camera device connected to the host.
+ */
+class VirtualRemoteCameraDevice : public VirtualCameraDevice {
+public:
+    /* Constructs VirtualRemoteCameraDevice instance. */
+    explicit VirtualRemoteCameraDevice(VirtualRemoteCamera *camera_hal);
 
-        /* Destructs VirtualRemoteCameraDevice instance. */
-        ~VirtualRemoteCameraDevice();
+    /* Destructs VirtualRemoteCameraDevice instance. */
+    ~VirtualRemoteCameraDevice();
 
-        /***************************************************************************
-         * Public API
-         **************************************************************************/
+    /***************************************************************************
+     * Public API
+     **************************************************************************/
 
-    public:
-        /* Initializes VirtualRemoteCameraDevice instance.
-        * Param:
-        *  device_name - Name of the camera device connected to the host. The name
-        *      that is used here must have been reported by the 'factory' camera
-        *      service when it listed camera devices connected to the host.
-        * Return:
-        *  NO_ERROR on success, or an appropriate error status.
-        */
-        status_t Initialize(const char *device_name);
+public:
+    /* Initializes VirtualRemoteCameraDevice instance.
+     * Param:
+     *  device_name - Name of the camera device connected to the host. The name
+     *      that is used here must have been reported by the 'factory' camera
+     *      service when it listed camera devices connected to the host.
+     * Return:
+     *  NO_ERROR on success, or an appropriate error status.
+     */
+    status_t Initialize(const char *device_name);
 
-        /***************************************************************************
-         * Virtual camera device abstract interface implementation.
-         * See declarations of these methods in VirtualCameraDevice class for
-         * information on each of these methods.
-         **************************************************************************/
+    /***************************************************************************
+     * Virtual camera device abstract interface implementation.
+     * See declarations of these methods in VirtualCameraDevice class for
+     * information on each of these methods.
+     **************************************************************************/
 
-    public:
-        /* Connects to the camera device. */
-        status_t connectDevice();
+public:
+    /* Connects to the camera device. */
+    status_t connectDevice();
 
-        /* Disconnects from the camera device. */
-        status_t disconnectDevice();
+    /* Disconnects from the camera device. */
+    status_t disconnectDevice();
 
-        /* Starts capturing frames from the camera device. */
-        status_t startDevice(int width, int height, uint32_t pix_fmt);
+    /* Starts capturing frames from the camera device. */
+    status_t startDevice(int width, int height, uint32_t pix_fmt);
 
-        /* Stops capturing frames from the camera device. */
-        status_t stopDevice();
+    /* Stops capturing frames from the camera device. */
+    status_t stopDevice();
 
-        /***************************************************************************
-         * VirtualCameraDevice virtual overrides
-         * See declarations of these methods in VirtualCameraDevice class for
-         * information on each of these methods.
-         **************************************************************************/
+    /***************************************************************************
+     * VirtualCameraDevice virtual overrides
+     * See declarations of these methods in VirtualCameraDevice class for
+     * information on each of these methods.
+     **************************************************************************/
 
-    public:
-        /* Copy the current frame to |buffer| */
-        status_t getCurrentFrame(void *buffer, uint32_t pixelFormat,
-                                 int64_t *timestamp) override;
+public:
+    /* Copy the current frame to |buffer| */
+    status_t getCurrentFrame(void *buffer, uint32_t pixelFormat, int64_t *timestamp) override;
 
-        /* Copy the current preview frame to |buffer| */
-        status_t getCurrentPreviewFrame(void *buffer,
-                                        int64_t *timestamp) override;
+    /* Copy the current preview frame to |buffer| */
+    status_t getCurrentPreviewFrame(void *buffer, int64_t *timestamp) override;
 
-        /* Get a pointer to the current frame, lock it first using FrameLock in
-        * VirtualCameraDevice class */
-        const void *getCurrentFrame() override;
+    /* Get a pointer to the current frame, lock it first using FrameLock in
+     * VirtualCameraDevice class */
+    const void *getCurrentFrame() override;
 
-        /***************************************************************************
-         * Worker thread management overrides.
-         * See declarations of these methods in VirtualCameraDevice class for
-         * information on each of these methods.
-         **************************************************************************/
+    /***************************************************************************
+     * Worker thread management overrides.
+     * See declarations of these methods in VirtualCameraDevice class for
+     * information on each of these methods.
+     **************************************************************************/
 
-    protected:
-        /* Implementation of the frame production routine. */
-        bool produceFrame(void *buffer, int64_t *timestamp) override;
+protected:
+    /* Implementation of the frame production routine. */
+    bool produceFrame(void *buffer, int64_t *timestamp) override;
 
-        void *getPrimaryBuffer() override;
-        void *getSecondaryBuffer() override;
+    void *getPrimaryBuffer() override;
+    void *getSecondaryBuffer() override;
 
-        /***************************************************************************
-         * Remote camera device data members
-         **************************************************************************/
+    /***************************************************************************
+     * Remote camera device data members
+     **************************************************************************/
 
-    private:
-        /* Remote client that is used to communicate with the 'virtual camera'
-        * service, created for this instance in the emulator. */
-        CameraRemoteClient mRemoteClient;
+private:
+    /* Remote client that is used to communicate with the 'virtual camera'
+     * service, created for this instance in the emulator. */
+    CameraRemoteClient mRemoteClient;
 
-        /* Name of the camera device connected to the host. */
-        String8 mDeviceName;
+    /* Name of the camera device connected to the host. */
+    String8 mDeviceName;
 
-        /* Current preview framebuffer. */
-        std::vector<uint32_t> mPreviewFrames[2];
+    /* Current preview framebuffer. */
+    std::vector<uint32_t> mPreviewFrames[2];
 
-        /* Since the Remote camera needs to keep track of two buffers per frame we
-        * use a pair here. One frame is the camera frame and the other is the
-        * preview frame. These are in different formats and instead of converting
-        * them in the guest it's more efficient to have the host provide the same
-        * frame in two different formats. The first buffer in the pair is the raw
-        * frame and the second buffer is the RGB encoded frame. The downside of
-        * this is that we need to override the getCurrentFrame and
-        * getCurrentPreviewFrame methods to extract the correct buffer from this
-        * pair. */
-        using FrameBufferPair = std::pair<uint8_t *, uint32_t *>;
-        FrameBufferPair mFrameBufferPairs[2];
-    };
+    /* Since the Remote camera needs to keep track of two buffers per frame we
+     * use a pair here. One frame is the camera frame and the other is the
+     * preview frame. These are in different formats and instead of converting
+     * them in the guest it's more efficient to have the host provide the same
+     * frame in two different formats. The first buffer in the pair is the raw
+     * frame and the second buffer is the RGB encoded frame. The downside of
+     * this is that we need to override the getCurrentFrame and
+     * getCurrentPreviewFrame methods to extract the correct buffer from this
+     * pair. */
+    using FrameBufferPair = std::pair<uint8_t *, uint32_t *>;
+    FrameBufferPair mFrameBufferPairs[2];
+};
 
 }; /* namespace android */
 

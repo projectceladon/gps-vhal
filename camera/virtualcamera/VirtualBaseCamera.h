@@ -20,103 +20,98 @@
 #include <hardware/camera_common.h>
 #include <utils/Errors.h>
 
-namespace android
-{
+namespace android {
 
-    /*
-   * Contains declaration of a class VirtualBaseCamera that encapsulates
-   * functionality common to all virtual camera device versions ("fake",
-   * "webcam", "video file", etc.).  Instances of this class (for each virtual
-   * camera) are created during the construction of the VirtualCameraFactory
-   * instance.  This class serves as an entry point for all camera API calls that
-   * are common across all versions of the camera_device_t/camera_module_t
-   * structures.
-   */
+/*
+ * Contains declaration of a class VirtualBaseCamera that encapsulates
+ * functionality common to all virtual camera device versions ("fake",
+ * "webcam", "video file", etc.).  Instances of this class (for each virtual
+ * camera) are created during the construction of the VirtualCameraFactory
+ * instance.  This class serves as an entry point for all camera API calls that
+ * are common across all versions of the camera_device_t/camera_module_t
+ * structures.
+ */
 
-    class VirtualBaseCamera
-    {
-    public:
-        VirtualBaseCamera(int cameraId,
-                          uint32_t cameraVersion,
-                          struct hw_device_t *device,
-                          struct hw_module_t *module);
+class VirtualBaseCamera {
+public:
+    VirtualBaseCamera(int cameraId, uint32_t cameraVersion, struct hw_device_t *device,
+                      struct hw_module_t *module);
 
-        virtual ~VirtualBaseCamera();
+    virtual ~VirtualBaseCamera();
 
-        /****************************************************************************
-       * Public API
-       ***************************************************************************/
+    /****************************************************************************
+     * Public API
+     ***************************************************************************/
 
-    public:
-        /* Initializes VirtualCamera instance.
-         * Return:
-         *  NO_ERROR on success, or an appropriate error status on failure.
-         */
-        virtual status_t Initialize(const char *device_name,
-                            const char *frame_dims,
-                            const char *facing_dir) = 0;
+public:
+    /* Initializes VirtualCamera instance.
+     * Return:
+     *  NO_ERROR on success, or an appropriate error status on failure.
+     */
+    virtual status_t Initialize(const char *device_name, const char *frame_dims,
+                                const char *facing_dir) = 0;
 
-        /****************************************************************************
-          * Camera API implementation
-          ***************************************************************************/
+    /****************************************************************************
+     * Camera API implementation
+     ***************************************************************************/
 
-    public:
-        /* Creates connection to the virtual camera device.
-         * This method is called in response to hw_module_methods_t::open callback.
-         * NOTE: When this method is called the object is locked.
-         * Note that failures in this method are reported as negative EXXX statuses.
-         */
-        virtual status_t connectCamera(hw_device_t **device) = 0;
+public:
+    /* Creates connection to the virtual camera device.
+     * This method is called in response to hw_module_methods_t::open callback.
+     * NOTE: When this method is called the object is locked.
+     * Note that failures in this method are reported as negative EXXX statuses.
+     */
+    virtual status_t connectCamera(hw_device_t **device) = 0;
 
-        /* Plug the connection for the virtual camera. Until it's plugged in
-         * calls to connectCamera should fail with -ENODEV.
-         */
-        virtual status_t plugCamera();
+    /* Plug the connection for the virtual camera. Until it's plugged in
+     * calls to connectCamera should fail with -ENODEV.
+     */
+    virtual status_t plugCamera();
 
-        /* Unplug the connection from underneath the virtual camera.
-         * This is similar to closing the camera, except that
-         * all function calls into the camera device will return
-         * -EPIPE errors until the camera is reopened.
-         */
-        virtual status_t unplugCamera();
+    /* Unplug the connection from underneath the virtual camera.
+     * This is similar to closing the camera, except that
+     * all function calls into the camera device will return
+     * -EPIPE errors until the camera is reopened.
+     */
+    virtual status_t unplugCamera();
 
-        virtual camera_device_status_t getHotplugStatus();
+    virtual camera_device_status_t getHotplugStatus();
 
-        /* Closes connection to the virtual camera.
-         * This method is called in response to camera_device::close callback.
-         * NOTE: When this method is called the object is locked.
-         * Note that failures in this method are reported as negative EXXX statuses.
-         */
-        virtual status_t closeCamera() = 0;
+    /* Closes connection to the virtual camera.
+     * This method is called in response to camera_device::close callback.
+     * NOTE: When this method is called the object is locked.
+     * Note that failures in this method are reported as negative EXXX statuses.
+     */
+    virtual status_t closeCamera() = 0;
 
-        /* Gets camera information.
-         * This method is called in response to camera_module_t::get_camera_info
-         * callback.
-         * NOTE: When this method is called the object is locked.
-         * Note that failures in this method are reported as negative EXXX statuses.
-         */
-        virtual status_t getCameraInfo(struct camera_info *info) = 0;
+    /* Gets camera information.
+     * This method is called in response to camera_module_t::get_camera_info
+     * callback.
+     * NOTE: When this method is called the object is locked.
+     * Note that failures in this method are reported as negative EXXX statuses.
+     */
+    virtual status_t getCameraInfo(struct camera_info *info) = 0;
 
-        /****************************************************************************
-          * Data members
-          ***************************************************************************/
+    /****************************************************************************
+     * Data members
+     ***************************************************************************/
 
-        virtual status_t setCameraFD(int socketFd);
-        virtual status_t cleanCameraFD(int socketFd);
+    virtual status_t setCameraFD(int socketFd);
+    virtual status_t cleanCameraFD(int socketFd);
 
-    protected:
-        /* Fixed camera information for camera2 devices. Must be valid to access if
-         * mCameraDeviceVersion is >= HARDWARE_DEVICE_API_VERSION(2,0)  */
-        camera_metadata_t *mCameraInfo;
+protected:
+    /* Fixed camera information for camera2 devices. Must be valid to access if
+     * mCameraDeviceVersion is >= HARDWARE_DEVICE_API_VERSION(2,0)  */
+    camera_metadata_t *mCameraInfo;
 
-        /* Zero-based ID assigned to this camera. */
-        int mCameraID;
-        int mCameraSocketFD;
+    /* Zero-based ID assigned to this camera. */
+    int mCameraID;
+    int mCameraSocketFD;
 
-    private:
-        /* Version of the camera device HAL implemented by this camera */
-        int mCameraDeviceVersion;
-    };
+private:
+    /* Version of the camera device HAL implemented by this camera */
+    int mCameraDeviceVersion;
+};
 
 } /* namespace android */
 

@@ -29,21 +29,13 @@
  * in its destructor. Use LOGRE() macro (declared bellow) to create instances
  * of this class at the beginning of the tracked routines / methods.
  */
-class HWERoutineTracker
-{
+class HWERoutineTracker {
 public:
     /* Constructor that prints an "entry" trace message. */
-    explicit HWERoutineTracker(const char *name)
-        : mName(name)
-    {
-        ALOGV("Entering %s", mName);
-    }
+    explicit HWERoutineTracker(const char *name) : mName(name) { ALOGV("Entering %s", mName); }
 
     /* Destructor that prints a "leave" trace message. */
-    ~HWERoutineTracker()
-    {
-        ALOGV("Leaving %s", mName);
-    }
+    ~HWERoutineTracker() { ALOGV("Leaving %s", mName); }
 
 private:
     /* Stores the routine name. */

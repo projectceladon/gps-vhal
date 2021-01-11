@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2016 The Android Open Source Project
+ * Copyright (C) 2016 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,16 +21,11 @@
 #include <log/log.h>
 #include <libexif/exif-data.h>
 
-Compressor::Compressor()
-{
-}
+Compressor::Compressor() {}
 
-bool Compressor::compress(const unsigned char *data,
-                          int width, int height, int quality,
-                          ExifData *exifData)
-{
-    if (!configureCompressor(width, height, quality))
-    {
+bool Compressor::compress(const unsigned char *data, int width, int height, int quality,
+                          ExifData *exifData) {
+    if (!configureCompressor(width, height, quality)) {
         // The method will have logged a more detailed error message than we can
         // provide here so just return.
         return false;
@@ -39,20 +34,15 @@ bool Compressor::compress(const unsigned char *data,
     return compressData(data, exifData);
 }
 
-const std::vector<uint8_t> &Compressor::getCompressedData() const
-{
-    return mDestManager.mBuffer;
-}
+const std::vector<uint8_t> &Compressor::getCompressedData() const { return mDestManager.mBuffer; }
 
-bool Compressor::configureCompressor(int width, int height, int quality)
-{
+bool Compressor::configureCompressor(int width, int height, int quality) {
     mCompressInfo.err = jpeg_std_error(&mErrorManager);
     // NOTE! DANGER! Do not construct any non-trivial objects below setjmp!
     // The compiler will not generate code to destroy them during the return
     // below so they will leak. Additionally, do not place any calls to libjpeg
     // that can fail above this line or any error will cause undefined behavior.
-    if (setjmp(mErrorManager.mJumpBuffer))
-    {
+    if (setjmp(mErrorManager.mJumpBuffer)) {
         // This is where the error handler will jump in case setup fails
         // The error manager will ALOG an appropriate error message
         return false;
@@ -86,18 +76,14 @@ bool Compressor::configureCompressor(int width, int height, int quality)
 }
 
 static void deinterleave(const uint8_t *vuPlanar, std::vector<uint8_t> &uRows,
-                         std::vector<uint8_t> &vRows, int rowIndex, int width,
-                         int height, int stride)
-{
+                         std::vector<uint8_t> &vRows, int rowIndex, int width, int height,
+                         int stride) {
     int numRows = (height - rowIndex) / 2;
-    if (numRows > 8)
-        numRows = 8;
-    for (int row = 0; row < numRows; ++row)
-    {
+    if (numRows > 8) numRows = 8;
+    for (int row = 0; row < numRows; ++row) {
         int offset = ((rowIndex >> 1) + row) * stride;
         const uint8_t *vu = vuPlanar + offset;
-        for (int i = 0; i < (width >> 1); ++i)
-        {
+        for (int i = 0; i < (width >> 1); ++i) {
             int index = row * (width >> 1) + i;
             uRows[index] = vu[1];
             vRows[index] = vu[0];
@@ -106,8 +92,7 @@ static void deinterleave(const uint8_t *vuPlanar, std::vector<uint8_t> &uRows,
     }
 }
 
-bool Compressor::compressData(const unsigned char *data, ExifData *exifData)
-{
+bool Compressor::compressData(const unsigned char *data, ExifData *exifData) {
     const uint8_t *y[16];
     const uint8_t *cb[8];
     const uint8_t *cr[8];
@@ -125,8 +110,7 @@ bool Compressor::compressData(const unsigned char *data, ExifData *exifData)
     // The compiler will not generate code to destroy them during the return
     // below so they will leak. Additionally, do not place any calls to libjpeg
     // that can fail above this line or any error will cause undefined behavior.
-    if (setjmp(mErrorManager.mJumpBuffer))
-    {
+    if (setjmp(mErrorManager.mJumpBuffer)) {
         // This is where the error handler will jump in case compression fails
         // The error manager will ALOG an appropriate error message
         return false;
@@ -137,21 +121,17 @@ bool Compressor::compressData(const unsigned char *data, ExifData *exifData)
     attachExifData(exifData);
 
     // process 16 lines of Y and 8 lines of U/V each time.
-    while (mCompressInfo.next_scanline < mCompressInfo.image_height)
-    {
-        //deinterleave u and v
-        deinterleave(vuPlanar, uRows, vRows, mCompressInfo.next_scanline,
-                     width, height, width);
+    while (mCompressInfo.next_scanline < mCompressInfo.image_height) {
+        // deinterleave u and v
+        deinterleave(vuPlanar, uRows, vRows, mCompressInfo.next_scanline, width, height, width);
 
         // Jpeg library ignores the rows whose indices are greater than height.
-        for (i = 0; i < 16; i++)
-        {
+        for (i = 0; i < 16; i++) {
             // y row
             y[i] = yPlanar + (mCompressInfo.next_scanline + i) * width;
 
             // construct u row and v row
-            if ((i & 1) == 0)
-            {
+            if ((i & 1) == 0) {
                 // height and width are both halved because of downsampling
                 offset = (i >> 1) * (width >> 1);
                 cb[i / 2] = &uRows[offset];
@@ -167,10 +147,8 @@ bool Compressor::compressData(const unsigned char *data, ExifData *exifData)
     return true;
 }
 
-bool Compressor::attachExifData(ExifData *exifData)
-{
-    if (exifData == nullptr)
-    {
+bool Compressor::attachExifData(ExifData *exifData) {
+    if (exifData == nullptr) {
         // This is not an error, we don't require EXIF data
         return true;
     }
@@ -179,8 +157,7 @@ bool Compressor::attachExifData(ExifData *exifData)
     unsigned char *rawData = nullptr;
     unsigned int size = 0;
     exif_data_save_data(exifData, &rawData, &size);
-    if (rawData == nullptr)
-    {
+    if (rawData == nullptr) {
         ALOGE("Failed to create EXIF data block");
         return false;
     }
@@ -190,13 +167,9 @@ bool Compressor::attachExifData(ExifData *exifData)
     return true;
 }
 
-Compressor::ErrorManager::ErrorManager()
-{
-    error_exit = &onJpegError;
-}
+Compressor::ErrorManager::ErrorManager() { error_exit = &onJpegError; }
 
-void Compressor::ErrorManager::onJpegError(j_common_ptr cinfo)
-{
+void Compressor::ErrorManager::onJpegError(j_common_ptr cinfo) {
     // NOTE! Do not construct any non-trivial objects in this method at the top
     // scope. Their destructors will not be called. If you do need such an
     // object create a local scope that does not include the longjmp call,
@@ -214,15 +187,13 @@ void Compressor::ErrorManager::onJpegError(j_common_ptr cinfo)
     longjmp(errorManager->mJumpBuffer, 1);
 }
 
-Compressor::DestinationManager::DestinationManager()
-{
+Compressor::DestinationManager::DestinationManager() {
     init_destination = &initDestination;
     empty_output_buffer = &emptyOutputBuffer;
     term_destination = &termDestination;
 }
 
-void Compressor::DestinationManager::initDestination(j_compress_ptr cinfo)
-{
+void Compressor::DestinationManager::initDestination(j_compress_ptr cinfo) {
     auto manager = reinterpret_cast<DestinationManager *>(cinfo->dest);
 
     // Start out with some arbitrary but not too large buffer size
@@ -231,9 +202,7 @@ void Compressor::DestinationManager::initDestination(j_compress_ptr cinfo)
     manager->free_in_buffer = manager->mBuffer.size();
 }
 
-boolean Compressor::DestinationManager::emptyOutputBuffer(
-    j_compress_ptr cinfo)
-{
+boolean Compressor::DestinationManager::emptyOutputBuffer(j_compress_ptr cinfo) {
     auto manager = reinterpret_cast<DestinationManager *>(cinfo->dest);
 
     // Keep doubling the size of the buffer for a very low, amortized
@@ -245,8 +214,7 @@ boolean Compressor::DestinationManager::emptyOutputBuffer(
     return manager->free_in_buffer != 0;
 }
 
-void Compressor::DestinationManager::termDestination(j_compress_ptr cinfo)
-{
+void Compressor::DestinationManager::termDestination(j_compress_ptr cinfo) {
     auto manager = reinterpret_cast<DestinationManager *>(cinfo->dest);
 
     // Resize down to the exact size of the output, that is remove as many

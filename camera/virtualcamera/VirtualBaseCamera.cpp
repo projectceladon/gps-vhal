@@ -30,78 +30,61 @@
 
 #include "VirtualBaseCamera.h"
 
-namespace android
-{
+namespace android {
 
-    VirtualBaseCamera::VirtualBaseCamera(int cameraId,
-                                         uint32_t cameraVersion,
-                                         struct hw_device_t *device,
-                                         struct hw_module_t *module)
-        : mCameraInfo(NULL),
-          mCameraID(cameraId),
-          mCameraDeviceVersion(cameraVersion)
-    {
-        /*
-        * Initialize camera_device descriptor for this object.
-        */
+VirtualBaseCamera::VirtualBaseCamera(int cameraId, uint32_t cameraVersion,
+                                     struct hw_device_t *device, struct hw_module_t *module)
+    : mCameraInfo(NULL), mCameraID(cameraId), mCameraDeviceVersion(cameraVersion) {
+    /*
+     * Initialize camera_device descriptor for this object.
+     */
 
-        /* Common header */
-        device->tag = HARDWARE_DEVICE_TAG;
-        device->version = cameraVersion;
-        device->module = module;
-        device->close = NULL; // Must be filled in by child implementation
+    /* Common header */
+    device->tag = HARDWARE_DEVICE_TAG;
+    device->version = cameraVersion;
+    device->module = module;
+    device->close = NULL;  // Must be filled in by child implementation
+}
+
+VirtualBaseCamera::~VirtualBaseCamera() {}
+
+status_t VirtualBaseCamera::getCameraInfo(struct camera_info *info) {
+    ALOGV("%s", __FUNCTION__);
+
+    info->device_version = mCameraDeviceVersion;
+    if (mCameraDeviceVersion >= HARDWARE_DEVICE_API_VERSION(2, 0)) {
+        info->static_camera_characteristics = mCameraInfo;
+    } else {
+        info->static_camera_characteristics = (camera_metadata_t *)0xcafef00d;
     }
 
-    VirtualBaseCamera::~VirtualBaseCamera()
-    {
-    }
+    return NO_ERROR;
+}
 
-    status_t VirtualBaseCamera::getCameraInfo(struct camera_info *info)
-    {
-        ALOGV("%s", __FUNCTION__);
+status_t VirtualBaseCamera::setCameraFD(int socketFd) {
+    mCameraSocketFD = socketFd;
+    ALOGV("%s mCameraSocketFD = %d", __FUNCTION__, mCameraSocketFD);
+    return NO_ERROR;
+}
 
-        info->device_version = mCameraDeviceVersion;
-        if (mCameraDeviceVersion >= HARDWARE_DEVICE_API_VERSION(2, 0))
-        {
-            info->static_camera_characteristics = mCameraInfo;
-        }
-        else
-        {
-            info->static_camera_characteristics = (camera_metadata_t *)0xcafef00d;
-        }
+status_t VirtualBaseCamera::cleanCameraFD(int socketFd) {
+    mCameraSocketFD = -1;
+    ALOGV("%s Clean mCameraSocketFD. Now it is %d", __func__, mCameraSocketFD);
+    return NO_ERROR;
+}
 
-        return NO_ERROR;
-    }
+status_t VirtualBaseCamera::plugCamera() {
+    ALOGE("%s: not supported", __FUNCTION__);
+    return INVALID_OPERATION;
+}
 
-    status_t VirtualBaseCamera::setCameraFD(int socketFd)
-    {
-        mCameraSocketFD = socketFd;
-        ALOGV("%s mCameraSocketFD = %d", __FUNCTION__, mCameraSocketFD);
-        return NO_ERROR;
-    }
+status_t VirtualBaseCamera::unplugCamera() {
+    ALOGE("%s: not supported", __FUNCTION__);
+    return INVALID_OPERATION;
+}
 
-    status_t VirtualBaseCamera::cleanCameraFD(int socketFd)
-    {
-        mCameraSocketFD = -1;
-        ALOGV("%s Clean mCameraSocketFD. Now it is %d", __func__, mCameraSocketFD);
-        return NO_ERROR;
-    }
-
-    status_t VirtualBaseCamera::plugCamera()
-    {
-        ALOGE("%s: not supported", __FUNCTION__);
-        return INVALID_OPERATION;
-    }
-
-    status_t VirtualBaseCamera::unplugCamera()
-    {
-        ALOGE("%s: not supported", __FUNCTION__);
-        return INVALID_OPERATION;
-    }
-
-    camera_device_status_t VirtualBaseCamera::getHotplugStatus()
-    {
-        return CAMERA_DEVICE_STATUS_PRESENT;
-    }
+camera_device_status_t VirtualBaseCamera::getHotplugStatus() {
+    return CAMERA_DEVICE_STATUS_PRESENT;
+}
 
 } /* namespace android */

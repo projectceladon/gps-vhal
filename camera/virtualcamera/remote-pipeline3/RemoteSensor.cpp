@@ -36,291 +36,245 @@
 #include <linux/videodev2.h>
 #include <log/log.h>
 
-namespace android
-{
+namespace android {
 
-    const nsecs_t RemoteSensor::kExposureTimeRange[2] =
-        {1000L, 300000000L}; // 1 us - 0.3 sec
-    const nsecs_t RemoteSensor::kFrameDurationRange[2] =
-        {33331760L, 300000000L}; // ~1/30 s - 0.3 sec
-    const nsecs_t RemoteSensor::kMinVerticalBlank = 10000L;
+const nsecs_t RemoteSensor::kExposureTimeRange[2] = {1000L, 300000000L};       // 1 us - 0.3 sec
+const nsecs_t RemoteSensor::kFrameDurationRange[2] = {33331760L, 300000000L};  // ~1/30 s - 0.3 sec
+const nsecs_t RemoteSensor::kMinVerticalBlank = 10000L;
 
-    const int32_t RemoteSensor::kSensitivityRange[2] = {100, 1600};
-    const uint32_t RemoteSensor::kDefaultSensitivity = 100;
+const int32_t RemoteSensor::kSensitivityRange[2] = {100, 1600};
+const uint32_t RemoteSensor::kDefaultSensitivity = 100;
 
-    RemoteSensor::RemoteSensor(const char *deviceName, uint32_t width, uint32_t height) : Thread(false),
-                                                                                          mWidth(width),
-                                                                                          mHeight(height),
-                                                                                          mActiveArray{0, 0, width, height},
-                                                                                          mLastRequestWidth(-1),
-                                                                                          mLastRequestHeight(-1),
-                                                                                          mCameraRemoteClient(),
-                                                                                          mDeviceName(deviceName),
-                                                                                          mGotVSync(false),
-                                                                                          mFrameDuration(kFrameDurationRange[0]),
-                                                                                          mNextBuffers(nullptr),
-                                                                                          mFrameNumber(0),
-                                                                                          mCapturedBuffers(nullptr),
-                                                                                          mListener(nullptr)
-    {
-        ALOGV("RemoteSensor created with pixel array %d x %d", width, height);
+RemoteSensor::RemoteSensor(const char *deviceName, uint32_t width, uint32_t height)
+    : Thread(false),
+      mWidth(width),
+      mHeight(height),
+      mActiveArray{0, 0, width, height},
+      mLastRequestWidth(-1),
+      mLastRequestHeight(-1),
+      mCameraRemoteClient(),
+      mDeviceName(deviceName),
+      mGotVSync(false),
+      mFrameDuration(kFrameDurationRange[0]),
+      mNextBuffers(nullptr),
+      mFrameNumber(0),
+      mCapturedBuffers(nullptr),
+      mListener(nullptr) {
+    ALOGV("RemoteSensor created with pixel array %d x %d", width, height);
+}
+
+RemoteSensor::~RemoteSensor() { shutDown(); }
+
+status_t RemoteSensor::startUp() {
+    ALOGV("%s: Entered", __FUNCTION__);
+
+    mCapturedBuffers = nullptr;
+    status_t res = run("VirtualRemoteCamera3::RemoteSensor", ANDROID_PRIORITY_URGENT_DISPLAY);
+
+    if (res != OK) {
+        ALOGE("Unable to start up sensor capture thread: %d", res);
     }
 
-    RemoteSensor::~RemoteSensor()
-    {
-        shutDown();
-    }
-
-    status_t RemoteSensor::startUp()
-    {
-        ALOGV("%s: Entered", __FUNCTION__);
-
-        mCapturedBuffers = nullptr;
-        status_t res = run("VirtualRemoteCamera3::RemoteSensor",
-                           ANDROID_PRIORITY_URGENT_DISPLAY);
-
-        if (res != OK)
-        {
-            ALOGE("Unable to start up sensor capture thread: %d", res);
-        }
-
-        char connect_str[256];
-        snprintf(connect_str, sizeof(connect_str), "name=%s", mDeviceName);
-        res = mCameraRemoteClient.connectClient(connect_str);
-        if (res != NO_ERROR)
-        {
-            return res;
-        }
-
-        res = mCameraRemoteClient.queryConnect();
-        if (res == NO_ERROR)
-        {
-            ALOGV("%s: Connected to device '%s'",
-                  __FUNCTION__, (const char *)mDeviceName);
-            mState = ECDS_CONNECTED;
-        }
-        else
-        {
-            ALOGE("%s: Connection to device '%s' failed",
-                  __FUNCTION__, (const char *)mDeviceName);
-        }
-
+    char connect_str[256];
+    snprintf(connect_str, sizeof(connect_str), "name=%s", mDeviceName);
+    res = mCameraRemoteClient.connectClient(connect_str);
+    if (res != NO_ERROR) {
         return res;
     }
 
-    status_t RemoteSensor::shutDown()
-    {
-        ALOGV("%s: Entered", __FUNCTION__);
-
-        status_t res = requestExitAndWait();
-        if (res != OK)
-        {
-            ALOGE("Unable to shut down sensor capture thread: %d", res);
-        }
-
-        /* Stop the actual camera device. */
-        res = mCameraRemoteClient.queryStop();
-        if (res == NO_ERROR)
-        {
-            mState = ECDS_CONNECTED;
-            ALOGV("%s: Remote camera device '%s' is stopped",
-                  __FUNCTION__, (const char *)mDeviceName);
-        }
-        else
-        {
-            ALOGE("%s: Unable to stop device '%s'",
-                  __FUNCTION__, (const char *)mDeviceName);
-        }
-
-        return res;
+    res = mCameraRemoteClient.queryConnect();
+    if (res == NO_ERROR) {
+        ALOGV("%s: Connected to device '%s'", __FUNCTION__, (const char *)mDeviceName);
+        mState = ECDS_CONNECTED;
+    } else {
+        ALOGE("%s: Connection to device '%s' failed", __FUNCTION__, (const char *)mDeviceName);
     }
 
-    void RemoteSensor::setFrameDuration(uint64_t ns)
-    {
-        Mutex::Autolock lock(mControlMutex);
-        ALOGVV("Frame duration set to %f", ns / 1000000.f);
-        mFrameDuration = ns;
+    return res;
+}
+
+status_t RemoteSensor::shutDown() {
+    ALOGV("%s: Entered", __FUNCTION__);
+
+    status_t res = requestExitAndWait();
+    if (res != OK) {
+        ALOGE("Unable to shut down sensor capture thread: %d", res);
     }
 
-    void RemoteSensor::setDestinationBuffers(Buffers *buffers)
-    {
-        Mutex::Autolock lock(mControlMutex);
-        mNextBuffers = buffers;
+    /* Stop the actual camera device. */
+    res = mCameraRemoteClient.queryStop();
+    if (res == NO_ERROR) {
+        mState = ECDS_CONNECTED;
+        ALOGV("%s: Remote camera device '%s' is stopped", __FUNCTION__, (const char *)mDeviceName);
+    } else {
+        ALOGE("%s: Unable to stop device '%s'", __FUNCTION__, (const char *)mDeviceName);
     }
 
-    void RemoteSensor::setFrameNumber(uint32_t frameNumber)
-    {
-        Mutex::Autolock lock(mControlMutex);
-        mFrameNumber = frameNumber;
-    }
+    return res;
+}
 
-    bool RemoteSensor::waitForVSync(nsecs_t reltime)
-    {
+void RemoteSensor::setFrameDuration(uint64_t ns) {
+    Mutex::Autolock lock(mControlMutex);
+    ALOGVV("Frame duration set to %f", ns / 1000000.f);
+    mFrameDuration = ns;
+}
+
+void RemoteSensor::setDestinationBuffers(Buffers *buffers) {
+    Mutex::Autolock lock(mControlMutex);
+    mNextBuffers = buffers;
+}
+
+void RemoteSensor::setFrameNumber(uint32_t frameNumber) {
+    Mutex::Autolock lock(mControlMutex);
+    mFrameNumber = frameNumber;
+}
+
+bool RemoteSensor::waitForVSync(nsecs_t reltime) {
+    int res;
+    Mutex::Autolock lock(mControlMutex);
+
+    mGotVSync = false;
+    res = mVSync.waitRelative(mControlMutex, reltime);
+    if (res != OK && res != TIMED_OUT) {
+        ALOGE("%s: Error waiting for VSync signal: %d", __FUNCTION__, res);
+        return false;
+    }
+    return mGotVSync;
+}
+
+bool RemoteSensor::waitForNewFrame(nsecs_t reltime, nsecs_t *captureTime) {
+    Mutex::Autolock lock(mReadoutMutex);
+    if (mCapturedBuffers == nullptr) {
         int res;
-        Mutex::Autolock lock(mControlMutex);
-
-        mGotVSync = false;
-        res = mVSync.waitRelative(mControlMutex, reltime);
-        if (res != OK && res != TIMED_OUT)
-        {
-            ALOGE("%s: Error waiting for VSync signal: %d", __FUNCTION__, res);
+        res = mReadoutAvailable.waitRelative(mReadoutMutex, reltime);
+        if (res == TIMED_OUT) {
+            return false;
+        } else if (res != OK || mCapturedBuffers == nullptr) {
+            ALOGE("Error waiting for sensor readout signal: %d", res);
             return false;
         }
-        return mGotVSync;
     }
+    mReadoutComplete.signal();
 
-    bool RemoteSensor::waitForNewFrame(nsecs_t reltime, nsecs_t *captureTime)
+    *captureTime = mCaptureTime;
+    mCapturedBuffers = nullptr;
+    return true;
+}
+
+RemoteSensor::RemoteSensorListener::~RemoteSensorListener() {}
+
+void RemoteSensor::setRemoteSensorListener(RemoteSensorListener *listener) {
+    Mutex::Autolock lock(mControlMutex);
+    mListener = listener;
+}
+
+status_t RemoteSensor::setCameraFD(int socketFd) {
+    mCameraRemoteClient.setCameraFD(socketFd);
+    return NO_ERROR;
+}
+
+status_t RemoteSensor::cleanCameraFD(int socketFd) {
+    mCameraRemoteClient.cleanCameraFD(socketFd);
+    return NO_ERROR;
+}
+
+status_t RemoteSensor::readyToRun() {
+    ALOGV("Starting up sensor thread");
+    mStartupTime = systemTime();
+    mNextCaptureTime = 0;
+    mNextCapturedBuffers = nullptr;
+    return OK;
+}
+
+bool RemoteSensor::threadLoop() {
+    /*
+     * Stages are out-of-order relative to a single frame's processing, but
+     * in-order in time.
+     */
+
+    /*
+     * Stage 1: Read in latest control parameters.
+     */
+    uint64_t frameDuration;
+    Buffers *nextBuffers;
+    uint32_t frameNumber;
+    RemoteSensorListener *listener = nullptr;
     {
-        Mutex::Autolock lock(mReadoutMutex);
-        if (mCapturedBuffers == nullptr)
-        {
-            int res;
-            res = mReadoutAvailable.waitRelative(mReadoutMutex, reltime);
-            if (res == TIMED_OUT)
-            {
-                return false;
-            }
-            else if (res != OK || mCapturedBuffers == nullptr)
-            {
-                ALOGE("Error waiting for sensor readout signal: %d", res);
-                return false;
-            }
-        }
-        mReadoutComplete.signal();
-
-        *captureTime = mCaptureTime;
-        mCapturedBuffers = nullptr;
-        return true;
-    }
-
-    RemoteSensor::RemoteSensorListener::~RemoteSensorListener()
-    {
-    }
-
-    void RemoteSensor::setRemoteSensorListener(RemoteSensorListener *listener)
-    {
+        // Lock while we're grabbing readout variables.
         Mutex::Autolock lock(mControlMutex);
-        mListener = listener;
+        frameDuration = mFrameDuration;
+        nextBuffers = mNextBuffers;
+        frameNumber = mFrameNumber;
+        listener = mListener;
+        // Don't reuse a buffer set.
+        mNextBuffers = nullptr;
+
+        // Signal VSync for start of readout.
+        ALOGVV("RemoteSensor VSync");
+        mGotVSync = true;
+        mVSync.signal();
     }
 
-    status_t RemoteSensor::setCameraFD(int socketFd)
-    {
-        mCameraRemoteClient.setCameraFD(socketFd);
-        return NO_ERROR;
-    }
+    /*
+     * Stage 3: Read out latest captured image.
+     */
 
-    status_t RemoteSensor::cleanCameraFD(int socketFd)
-    {
-        mCameraRemoteClient.cleanCameraFD(socketFd);
-        return NO_ERROR;
-    }
+    Buffers *capturedBuffers = nullptr;
+    nsecs_t captureTime = 0;
 
-    status_t RemoteSensor::readyToRun()
-    {
-        ALOGV("Starting up sensor thread");
-        mStartupTime = systemTime();
-        mNextCaptureTime = 0;
-        mNextCapturedBuffers = nullptr;
-        return OK;
-    }
+    nsecs_t startRealTime = systemTime();
+    /*
+     * Stagefright cares about system time for timestamps, so base simulated
+     * time on that.
+     */
+    nsecs_t simulatedTime = startRealTime;
+    nsecs_t frameEndRealTime = startRealTime + frameDuration;
 
-    bool RemoteSensor::threadLoop()
-    {
+    if (mNextCapturedBuffers != nullptr) {
+        ALOGVV("RemoteSensor starting readout");
         /*
-        * Stages are out-of-order relative to a single frame's processing, but
-        * in-order in time.
-        */
+         * Pretend we're doing readout now; will signal once enough time has
+         * elapsed.
+         */
+        capturedBuffers = mNextCapturedBuffers;
+        captureTime = mNextCaptureTime;
+    }
 
-        /*
-        * Stage 1: Read in latest control parameters.
-        */
-        uint64_t frameDuration;
-        Buffers *nextBuffers;
-        uint32_t frameNumber;
-        RemoteSensorListener *listener = nullptr;
-        {
-            // Lock while we're grabbing readout variables.
-            Mutex::Autolock lock(mControlMutex);
-            frameDuration = mFrameDuration;
-            nextBuffers = mNextBuffers;
-            frameNumber = mFrameNumber;
-            listener = mListener;
-            // Don't reuse a buffer set.
-            mNextBuffers = nullptr;
-
-            // Signal VSync for start of readout.
-            ALOGVV("RemoteSensor VSync");
-            mGotVSync = true;
-            mVSync.signal();
+    /*
+     * TODO: Move this signal to another thread to simulate readout time
+     * properly.
+     */
+    if (capturedBuffers != nullptr) {
+        ALOGVV("RemoteSensor readout complete");
+        Mutex::Autolock lock(mReadoutMutex);
+        if (mCapturedBuffers != nullptr) {
+            ALOGV("Waiting for readout thread to catch up!");
+            mReadoutComplete.wait(mReadoutMutex);
         }
 
-        /*
-        * Stage 3: Read out latest captured image.
-        */
+        mCapturedBuffers = capturedBuffers;
+        mCaptureTime = captureTime;
+        mReadoutAvailable.signal();
+        capturedBuffers = nullptr;
+    }
 
-        Buffers *capturedBuffers = nullptr;
-        nsecs_t captureTime = 0;
+    /*
+     * Stage 2: Capture new image.
+     */
+    mNextCaptureTime = simulatedTime;
+    mNextCapturedBuffers = nextBuffers;
 
-        nsecs_t startRealTime = systemTime();
-        /*
-        * Stagefright cares about system time for timestamps, so base simulated
-        * time on that.
-        */
-        nsecs_t simulatedTime = startRealTime;
-        nsecs_t frameEndRealTime = startRealTime + frameDuration;
+    if (mNextCapturedBuffers != nullptr) {
+        int64_t timestamp = 0L;
 
-        if (mNextCapturedBuffers != nullptr)
-        {
-            ALOGVV("RemoteSensor starting readout");
-            /*
-            * Pretend we're doing readout now; will signal once enough time has
-            * elapsed.
-            */
-            capturedBuffers = mNextCapturedBuffers;
-            captureTime = mNextCaptureTime;
-        }
-
-        /*
-        * TODO: Move this signal to another thread to simulate readout time
-        * properly.
-        */
-        if (capturedBuffers != nullptr)
-        {
-            ALOGVV("RemoteSensor readout complete");
-            Mutex::Autolock lock(mReadoutMutex);
-            if (mCapturedBuffers != nullptr)
-            {
-                ALOGV("Waiting for readout thread to catch up!");
-                mReadoutComplete.wait(mReadoutMutex);
-            }
-
-            mCapturedBuffers = capturedBuffers;
-            mCaptureTime = captureTime;
-            mReadoutAvailable.signal();
-            capturedBuffers = nullptr;
-        }
-
-        /*
-        * Stage 2: Capture new image.
-        */
-        mNextCaptureTime = simulatedTime;
-        mNextCapturedBuffers = nextBuffers;
-
-        if (mNextCapturedBuffers != nullptr)
-        {
-
-            int64_t timestamp = 0L;
-
-            // Might be adding more buffers, so size isn't constant.
-            for (size_t i = 0; i < mNextCapturedBuffers->size(); ++i)
-            {
-                const StreamBuffer &b = (*mNextCapturedBuffers)[i];
-                ALOGVV("RemoteSensor capturing buffer %d: stream %d,"
-                       " %d x %d, format %x, stride %d, buf %p, img %p",
-                       i, b.streamId, b.width, b.height, b.format, b.stride,
-                       b.buffer, b.img);
-                switch (b.format)
-                {
+        // Might be adding more buffers, so size isn't constant.
+        for (size_t i = 0; i < mNextCapturedBuffers->size(); ++i) {
+            const StreamBuffer &b = (*mNextCapturedBuffers)[i];
+            ALOGVV(
+                "RemoteSensor capturing buffer %d: stream %d,"
+                " %d x %d, format %x, stride %d, buf %p, img %p",
+                i, b.streamId, b.width, b.height, b.format, b.stride, b.buffer, b.img);
+            switch (b.format) {
                 case HAL_PIXEL_FORMAT_RGB_888:
                     captureRGB(b.img, b.width, b.height, b.stride, &timestamp);
                     break;
@@ -328,12 +282,9 @@ namespace android
                     captureRGBA(b.img, b.width, b.height, b.stride, &timestamp);
                     break;
                 case HAL_PIXEL_FORMAT_BLOB:
-                    if (b.dataSpace == HAL_DATASPACE_DEPTH)
-                    {
+                    if (b.dataSpace == HAL_DATASPACE_DEPTH) {
                         ALOGE("%s: Depth clouds unsupported", __FUNCTION__);
-                    }
-                    else
-                    {
+                    } else {
                         /*
                          * Add auxillary buffer of the right size. Assumes only
                          * one BLOB (JPEG) buffer is in mNextCapturedBuffers.
@@ -354,199 +305,162 @@ namespace android
                     captureNV21(b.img, b.width, b.height, b.stride, &timestamp);
                     break;
                 default:
-                    ALOGE("%s: Unknown/unsupported format %x, no output",
-                          __FUNCTION__, b.format);
+                    ALOGE("%s: Unknown/unsupported format %x, no output", __FUNCTION__, b.format);
                     break;
-                }
-            }
-            if (timestamp != 0UL)
-            {
-                mNextCaptureTime = timestamp;
-            }
-            // Note: we have to do this after the actual capture so that the
-            // capture time is accurate as reported from REMOTE.
-            if (listener != nullptr)
-            {
-                listener->onRemoteSensorEvent(frameNumber, RemoteSensorListener::EXPOSURE_START,
-                                              mNextCaptureTime);
             }
         }
-
-        ALOGVV("RemoteSensor vertical blanking interval");
-        nsecs_t workDoneRealTime = systemTime();
-        const nsecs_t timeAccuracy = 2e6; // 2 ms of imprecision is ok.
-        if (workDoneRealTime < frameEndRealTime - timeAccuracy)
-        {
-            timespec t;
-            t.tv_sec = (frameEndRealTime - workDoneRealTime) / 1000000000L;
-            t.tv_nsec = (frameEndRealTime - workDoneRealTime) % 1000000000L;
-
-            int ret;
-            do
-            {
-                ret = nanosleep(&t, &t);
-            } while (ret != 0);
+        if (timestamp != 0UL) {
+            mNextCaptureTime = timestamp;
         }
-        ALOGVV("Frame cycle took %d ms, target %d ms",
-               (int)((systemTime() - startRealTime) / 1000000),
-               (int)(frameDuration / 1000000));
-        return true;
+        // Note: we have to do this after the actual capture so that the
+        // capture time is accurate as reported from REMOTE.
+        if (listener != nullptr) {
+            listener->onRemoteSensorEvent(frameNumber, RemoteSensorListener::EXPOSURE_START,
+                                          mNextCaptureTime);
+        }
     }
 
-    void RemoteSensor::captureRGBA(uint8_t *img, uint32_t width, uint32_t height,
-                                   uint32_t stride, int64_t *timestamp)
-    {
-        status_t res;
-        if (width != (uint32_t)mLastRequestWidth ||
-            height != (uint32_t)mLastRequestHeight)
-        {
-            ALOGI("%s: Dimensions for the current request (%dx%d) differ "
-                  "from the previous request (%dx%d). Restarting camera",
-                  __FUNCTION__, width, height, mLastRequestWidth,
-                  mLastRequestHeight);
+    ALOGVV("RemoteSensor vertical blanking interval");
+    nsecs_t workDoneRealTime = systemTime();
+    const nsecs_t timeAccuracy = 2e6;  // 2 ms of imprecision is ok.
+    if (workDoneRealTime < frameEndRealTime - timeAccuracy) {
+        timespec t;
+        t.tv_sec = (frameEndRealTime - workDoneRealTime) / 1000000000L;
+        t.tv_nsec = (frameEndRealTime - workDoneRealTime) % 1000000000L;
 
-            if (mLastRequestWidth != -1 || mLastRequestHeight != -1)
-            {
-                // We only need to stop the camera if this isn't the first request.
+        int ret;
+        do {
+            ret = nanosleep(&t, &t);
+        } while (ret != 0);
+    }
+    ALOGVV("Frame cycle took %d ms, target %d ms", (int)((systemTime() - startRealTime) / 1000000),
+           (int)(frameDuration / 1000000));
+    return true;
+}
 
-                // Stop the camera device.
-                res = mCameraRemoteClient.queryStop();
-                if (res == NO_ERROR)
-                {
-                    mState = ECDS_CONNECTED;
-                    ALOGV("%s: Remote camera device '%s' is stopped",
-                          __FUNCTION__, (const char *)mDeviceName);
-                }
-                else
-                {
-                    ALOGE("%s: Unable to stop device '%s'",
-                          __FUNCTION__, (const char *)mDeviceName);
-                }
-            }
+void RemoteSensor::captureRGBA(uint8_t *img, uint32_t width, uint32_t height, uint32_t stride,
+                               int64_t *timestamp) {
+    status_t res;
+    if (width != (uint32_t)mLastRequestWidth || height != (uint32_t)mLastRequestHeight) {
+        ALOGI(
+            "%s: Dimensions for the current request (%dx%d) differ "
+            "from the previous request (%dx%d). Restarting camera",
+            __FUNCTION__, width, height, mLastRequestWidth, mLastRequestHeight);
 
-            /*
-            * Host Camera always assumes V4L2_PIX_FMT_RGB32 as the preview format,
-            * and asks for the video format from the pixFmt parameter, which is
-            * V4L2_PIX_FMT_NV21 in our implementation.
-            */
-            uint32_t pixFmt = V4L2_PIX_FMT_NV21;
-            res = mCameraRemoteClient.queryStart(pixFmt, width, height);
-            if (res == NO_ERROR)
-            {
-                mLastRequestWidth = width;
-                mLastRequestHeight = height;
-                ALOGV("%s: Remote camera device '%s' is started for %.4s[%dx%d] frames",
-                      __FUNCTION__, (const char *)mDeviceName,
-                      reinterpret_cast<const char *>(&pixFmt),
-                      mWidth, mHeight);
-                mState = ECDS_STARTED;
-            }
-            else
-            {
-                ALOGE("%s: Unable to start device '%s' for %.4s[%dx%d] frames",
-                      __FUNCTION__, (const char *)mDeviceName,
-                      reinterpret_cast<const char *>(&pixFmt),
-                      mWidth, mHeight);
-                return;
+        if (mLastRequestWidth != -1 || mLastRequestHeight != -1) {
+            // We only need to stop the camera if this isn't the first request.
+
+            // Stop the camera device.
+            res = mCameraRemoteClient.queryStop();
+            if (res == NO_ERROR) {
+                mState = ECDS_CONNECTED;
+                ALOGV("%s: Remote camera device '%s' is stopped", __FUNCTION__,
+                      (const char *)mDeviceName);
+            } else {
+                ALOGE("%s: Unable to stop device '%s'", __FUNCTION__, (const char *)mDeviceName);
             }
         }
-        if (width != stride)
-        {
-            ALOGW("%s: expect stride (%d), actual stride (%d)", __FUNCTION__,
-                  width, stride);
+
+        /*
+         * Host Camera always assumes V4L2_PIX_FMT_RGB32 as the preview format,
+         * and asks for the video format from the pixFmt parameter, which is
+         * V4L2_PIX_FMT_NV21 in our implementation.
+         */
+        uint32_t pixFmt = V4L2_PIX_FMT_NV21;
+        res = mCameraRemoteClient.queryStart(pixFmt, width, height);
+        if (res == NO_ERROR) {
+            mLastRequestWidth = width;
+            mLastRequestHeight = height;
+            ALOGV("%s: Remote camera device '%s' is started for %.4s[%dx%d] frames", __FUNCTION__,
+                  (const char *)mDeviceName, reinterpret_cast<const char *>(&pixFmt), mWidth,
+                  mHeight);
+            mState = ECDS_STARTED;
+        } else {
+            ALOGE("%s: Unable to start device '%s' for %.4s[%dx%d] frames", __FUNCTION__,
+                  (const char *)mDeviceName, reinterpret_cast<const char *>(&pixFmt), mWidth,
+                  mHeight);
+            return;
         }
-
-        // Since the format is V4L2_PIX_FMT_RGB32, we need 4 bytes per pixel.
-        size_t bufferSize = width * height * 4;
-        // Apply no white balance or exposure compensation.
-        float whiteBalance[] = {1.0f, 1.0f, 1.0f};
-        float exposureCompensation = 1.0f;
-        // Read from webcam.
-        mCameraRemoteClient.queryFrame(nullptr, img, 0, bufferSize, whiteBalance[0],
-                                       whiteBalance[1], whiteBalance[2],
-                                       exposureCompensation, timestamp);
-
-        ALOGVV("RGBA sensor image captured");
+    }
+    if (width != stride) {
+        ALOGW("%s: expect stride (%d), actual stride (%d)", __FUNCTION__, width, stride);
     }
 
-    void RemoteSensor::captureRGB(uint8_t *img, uint32_t width, uint32_t height, uint32_t stride, int64_t *timestamp)
-    {
-        ALOGE("%s: Not implemented", __FUNCTION__);
-    }
+    // Since the format is V4L2_PIX_FMT_RGB32, we need 4 bytes per pixel.
+    size_t bufferSize = width * height * 4;
+    // Apply no white balance or exposure compensation.
+    float whiteBalance[] = {1.0f, 1.0f, 1.0f};
+    float exposureCompensation = 1.0f;
+    // Read from webcam.
+    mCameraRemoteClient.queryFrame(nullptr, img, 0, bufferSize, whiteBalance[0], whiteBalance[1],
+                                   whiteBalance[2], exposureCompensation, timestamp);
 
-    void RemoteSensor::captureNV21(uint8_t *img, uint32_t width, uint32_t height, uint32_t stride, int64_t *timestamp)
-    {
-        status_t res;
-        if (width != (uint32_t)mLastRequestWidth ||
-            height != (uint32_t)mLastRequestHeight)
-        {
-            ALOGI("%s: Dimensions for the current request (%dx%d) differ "
-                  "from the previous request (%dx%d). Restarting camera",
-                  __FUNCTION__, width, height, mLastRequestWidth,
-                  mLastRequestHeight);
+    ALOGVV("RGBA sensor image captured");
+}
 
-            if (mLastRequestWidth != -1 || mLastRequestHeight != -1)
-            {
-                // We only need to stop the camera if this isn't the first request.
+void RemoteSensor::captureRGB(uint8_t *img, uint32_t width, uint32_t height, uint32_t stride,
+                              int64_t *timestamp) {
+    ALOGE("%s: Not implemented", __FUNCTION__);
+}
 
-                // Stop the camera device.
-                res = mCameraRemoteClient.queryStop();
-                if (res == NO_ERROR)
-                {
-                    mState = ECDS_CONNECTED;
-                    ALOGV("%s: Remote camera device '%s' is stopped",
-                          __FUNCTION__, (const char *)mDeviceName);
-                }
-                else
-                {
-                    ALOGE("%s: Unable to stop device '%s'",
-                          __FUNCTION__, (const char *)mDeviceName);
-                }
-            }
+void RemoteSensor::captureNV21(uint8_t *img, uint32_t width, uint32_t height, uint32_t stride,
+                               int64_t *timestamp) {
+    status_t res;
+    if (width != (uint32_t)mLastRequestWidth || height != (uint32_t)mLastRequestHeight) {
+        ALOGI(
+            "%s: Dimensions for the current request (%dx%d) differ "
+            "from the previous request (%dx%d). Restarting camera",
+            __FUNCTION__, width, height, mLastRequestWidth, mLastRequestHeight);
 
-            /*
-            * Host Camera always assumes V4L2_PIX_FMT_RGB32 as the preview format,
-            * and asks for the video format from the pixFmt parameter, which is
-            * V4L2_PIX_FMT_NV21 in our implementation.
-            */
-            uint32_t pixFmt = V4L2_PIX_FMT_NV21;
-            res = mCameraRemoteClient.queryStart(pixFmt, width, height);
-            if (res == NO_ERROR)
-            {
-                mLastRequestWidth = width;
-                mLastRequestHeight = height;
-                ALOGV("%s: Remote camera device '%s' is started for %.4s[%dx%d] frames",
-                      __FUNCTION__, (const char *)mDeviceName,
-                      reinterpret_cast<const char *>(&pixFmt),
-                      mWidth, mHeight);
-                mState = ECDS_STARTED;
-            }
-            else
-            {
-                ALOGE("%s: Unable to start device '%s' for %.4s[%dx%d] frames",
-                      __FUNCTION__, (const char *)mDeviceName,
-                      reinterpret_cast<const char *>(&pixFmt),
-                      mWidth, mHeight);
-                return;
+        if (mLastRequestWidth != -1 || mLastRequestHeight != -1) {
+            // We only need to stop the camera if this isn't the first request.
+
+            // Stop the camera device.
+            res = mCameraRemoteClient.queryStop();
+            if (res == NO_ERROR) {
+                mState = ECDS_CONNECTED;
+                ALOGV("%s: Remote camera device '%s' is stopped", __FUNCTION__,
+                      (const char *)mDeviceName);
+            } else {
+                ALOGE("%s: Unable to stop device '%s'", __FUNCTION__, (const char *)mDeviceName);
             }
         }
-        if (width != stride)
-        {
-            ALOGW("%s: expect stride (%d), actual stride (%d)", __FUNCTION__,
-                  width, stride);
+
+        /*
+         * Host Camera always assumes V4L2_PIX_FMT_RGB32 as the preview format,
+         * and asks for the video format from the pixFmt parameter, which is
+         * V4L2_PIX_FMT_NV21 in our implementation.
+         */
+        uint32_t pixFmt = V4L2_PIX_FMT_NV21;
+        res = mCameraRemoteClient.queryStart(pixFmt, width, height);
+        if (res == NO_ERROR) {
+            mLastRequestWidth = width;
+            mLastRequestHeight = height;
+            ALOGV("%s: Remote camera device '%s' is started for %.4s[%dx%d] frames", __FUNCTION__,
+                  (const char *)mDeviceName, reinterpret_cast<const char *>(&pixFmt), mWidth,
+                  mHeight);
+            mState = ECDS_STARTED;
+        } else {
+            ALOGE("%s: Unable to start device '%s' for %.4s[%dx%d] frames", __FUNCTION__,
+                  (const char *)mDeviceName, reinterpret_cast<const char *>(&pixFmt), mWidth,
+                  mHeight);
+            return;
         }
-
-        // Calculate the buffer size for NV21.
-        size_t bufferSize = (width * height * 12) / 8;
-        // Apply no white balance or exposure compensation.
-        float whiteBalance[] = {1.0f, 1.0f, 1.0f};
-        float exposureCompensation = 1.0f;
-        // Read video frame from webcam.
-        mCameraRemoteClient.queryFrame(img, nullptr, bufferSize, 0, whiteBalance[0],
-                                       whiteBalance[1], whiteBalance[2],
-                                       exposureCompensation, timestamp);
-
-        ALOGVV("NV21 sensor image captured");
+    }
+    if (width != stride) {
+        ALOGW("%s: expect stride (%d), actual stride (%d)", __FUNCTION__, width, stride);
     }
 
-}; // end of namespace android
+    // Calculate the buffer size for NV21.
+    size_t bufferSize = (width * height * 12) / 8;
+    // Apply no white balance or exposure compensation.
+    float whiteBalance[] = {1.0f, 1.0f, 1.0f};
+    float exposureCompensation = 1.0f;
+    // Read video frame from webcam.
+    mCameraRemoteClient.queryFrame(img, nullptr, bufferSize, 0, whiteBalance[0], whiteBalance[1],
+                                   whiteBalance[2], exposureCompensation, timestamp);
+
+    ALOGVV("NV21 sensor image captured");
+}
+
+};  // end of namespace android

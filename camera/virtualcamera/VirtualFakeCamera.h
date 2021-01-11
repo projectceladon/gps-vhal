@@ -25,52 +25,48 @@
 
 #include "VirtualCamera.h"
 
-namespace android
-{
+namespace android {
 
-    /* Encapsulates functionality of a fake camera.
-    * This class is nothing more than a placeholder for VirtualFakeCameraDevice
-    * instance that emulates a fake camera device.
-    */
-    class VirtualFakeCamera : public VirtualCamera
-    {
-    public:
-        /* Constructs VirtualFakeCamera instance. */
-        VirtualFakeCamera(int cameraId, bool facingBack, struct hw_module_t *module);
+/* Encapsulates functionality of a fake camera.
+ * This class is nothing more than a placeholder for VirtualFakeCameraDevice
+ * instance that emulates a fake camera device.
+ */
+class VirtualFakeCamera : public VirtualCamera {
+public:
+    /* Constructs VirtualFakeCamera instance. */
+    VirtualFakeCamera(int cameraId, bool facingBack, struct hw_module_t *module);
 
-        /* Destructs VirtualFakeCamera instance. */
-        ~VirtualFakeCamera();
+    /* Destructs VirtualFakeCamera instance. */
+    ~VirtualFakeCamera();
 
-        /****************************************************************************
-         * VirtualCamera virtual overrides.
-         ***************************************************************************/
+    /****************************************************************************
+     * VirtualCamera virtual overrides.
+     ***************************************************************************/
 
-    public:
-        /* Initializes VirtualFakeCamera instance. */
-        status_t Initialize(const char *device_name,
-                            const char *frame_dims,
-                            const char *facing_dir);
+public:
+    /* Initializes VirtualFakeCamera instance. */
+    status_t Initialize(const char *device_name, const char *frame_dims, const char *facing_dir);
 
-        /****************************************************************************
-         * VirtualCamera abstract API implementation.
-         ***************************************************************************/
+    /****************************************************************************
+     * VirtualCamera abstract API implementation.
+     ***************************************************************************/
 
-    protected:
-        /* Gets virtual camera device ised by this instance of the virtual camera.
-        */
-        VirtualCameraDevice *getCameraDevice();
+protected:
+    /* Gets virtual camera device ised by this instance of the virtual camera.
+     */
+    VirtualCameraDevice *getCameraDevice();
 
-        /****************************************************************************
-         * Data memebers.
-         ***************************************************************************/
+    /****************************************************************************
+     * Data memebers.
+     ***************************************************************************/
 
-    protected:
-        /* Facing back (true) or front (false) switch. */
-        bool mFacingBack;
+protected:
+    /* Facing back (true) or front (false) switch. */
+    bool mFacingBack;
 
-        /* Contained fake camera device object. */
-        VirtualCameraDevice *mFakeCameraDevice;
-    };
+    /* Contained fake camera device object. */
+    VirtualCameraDevice *mFakeCameraDevice;
+};
 
 }; /* namespace android */
 

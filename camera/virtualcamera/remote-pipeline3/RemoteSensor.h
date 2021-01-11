@@ -33,175 +33,169 @@
 #include <utils/Thread.h>
 #include <utils/Timers.h>
 
-namespace android
-{
+namespace android {
 
-    class VirtualFakeCamera2;
+class VirtualFakeCamera2;
 
-    class RemoteSensor : private Thread, public virtual RefBase
-    {
-    public:
-        /*
-         * Args:
-         *     deviceName: File path where the capture device can be found (e.g.,
-         *                 "/dev/video0").
-         *     width: Width of pixel array.
-         *     height: Height of pixel array.
-         */
-        RemoteSensor(const char *deviceName, uint32_t width, uint32_t height);
-        ~RemoteSensor();
+class RemoteSensor : private Thread, public virtual RefBase {
+public:
+    /*
+     * Args:
+     *     deviceName: File path where the capture device can be found (e.g.,
+     *                 "/dev/video0").
+     *     width: Width of pixel array.
+     *     height: Height of pixel array.
+     */
+    RemoteSensor(const char *deviceName, uint32_t width, uint32_t height);
+    ~RemoteSensor();
 
-        /*
-         * Power Control
-         */
+    /*
+     * Power Control
+     */
 
-        status_t startUp();
-        status_t shutDown();
+    status_t startUp();
+    status_t shutDown();
 
-        /*
-         * Controls that can be updated every frame.
-         */
+    /*
+     * Controls that can be updated every frame.
+     */
 
-        void setFrameDuration(uint64_t ns);
+    void setFrameDuration(uint64_t ns);
 
-        /*
-         * Each Buffer in "buffers" must be at least stride*height*2 bytes in size.
-         */
-        void setDestinationBuffers(Buffers *buffers);
-        /*
-         * To simplify tracking the sensor's current frame.
-         */
-        void setFrameNumber(uint32_t frameNumber);
+    /*
+     * Each Buffer in "buffers" must be at least stride*height*2 bytes in size.
+     */
+    void setDestinationBuffers(Buffers *buffers);
+    /*
+     * To simplify tracking the sensor's current frame.
+     */
+    void setFrameNumber(uint32_t frameNumber);
 
-        /*
-         * Synchronizing with sensor operation (vertical sync).
-         */
+    /*
+     * Synchronizing with sensor operation (vertical sync).
+     */
 
-        /*
-         * Wait until the sensor outputs its next vertical sync signal, meaning it
-         * is starting readout of its latest frame of data.
-         *
-         * Returns:
-         *     true if vertical sync is signaled; false if the wait timed out.
-         */
-        bool waitForVSync(nsecs_t reltime);
+    /*
+     * Wait until the sensor outputs its next vertical sync signal, meaning it
+     * is starting readout of its latest frame of data.
+     *
+     * Returns:
+     *     true if vertical sync is signaled; false if the wait timed out.
+     */
+    bool waitForVSync(nsecs_t reltime);
 
-        /*
-         * Wait until a new frame has been read out, and then return the time
-         * capture started. May return immediately if a new frame has been pushed
-         * since the last wait for a new frame.
-         *
-         * Returns:
-         *     true if new frame is returned; false if timed out.
-         */
-        bool waitForNewFrame(nsecs_t reltime, nsecs_t *captureTime);
+    /*
+     * Wait until a new frame has been read out, and then return the time
+     * capture started. May return immediately if a new frame has been pushed
+     * since the last wait for a new frame.
+     *
+     * Returns:
+     *     true if new frame is returned; false if timed out.
+     */
+    bool waitForNewFrame(nsecs_t reltime, nsecs_t *captureTime);
 
-        /*
-         * Interrupt event servicing from the sensor. Only triggers for sensor
-         * cycles that have valid buffers to write to.
-         */
-        struct RemoteSensorListener
-        {
-            enum Event
-            {
-                EXPOSURE_START,
-            };
-
-            virtual void onRemoteSensorEvent(uint32_t frameNumber, Event e,
-                                             nsecs_t timestamp) = 0;
-            virtual ~RemoteSensorListener();
+    /*
+     * Interrupt event servicing from the sensor. Only triggers for sensor
+     * cycles that have valid buffers to write to.
+     */
+    struct RemoteSensorListener {
+        enum Event {
+            EXPOSURE_START,
         };
 
-        void setRemoteSensorListener(RemoteSensorListener *listener);
-
-        virtual status_t setCameraFD(int socketFd);
-        virtual status_t cleanCameraFD(int socketFd);
-
-        /*
-         * Static Sensor Characteristics
-         */
-        const uint32_t mWidth, mHeight;
-        const uint32_t mActiveArray[4];
-
-        static const nsecs_t kExposureTimeRange[2];
-        static const nsecs_t kFrameDurationRange[2];
-        static const nsecs_t kMinVerticalBlank;
-
-        static const int32_t kSensitivityRange[2];
-        static const uint32_t kDefaultSensitivity;
-
-    private:
-        int32_t mLastRequestWidth, mLastRequestHeight;
-
-        /*
-         * Defines possible states of the virtual camera device object.
-         */
-        enum VirtualCameraDeviceState
-        {
-            // Object has been constructed.
-            ECDS_CONSTRUCTED,
-            // Object has been initialized.
-            ECDS_INITIALIZED,
-            // Object has been connected to the physical device.
-            ECDS_CONNECTED,
-            // Camera device has been started.
-            ECDS_STARTED,
-        };
-        // Object state.
-        VirtualCameraDeviceState mState;
-
-        CameraRemoteClient mCameraRemoteClient;
-        const char *mDeviceName;
-
-        // Always lock before accessing control parameters.
-        Mutex mControlMutex;
-        /*
-         * Control Parameters
-         */
-        Condition mVSync;
-        bool mGotVSync;
-        uint64_t mFrameDuration;
-        Buffers *mNextBuffers;
-        uint32_t mFrameNumber;
-
-        // Always lock before accessing readout variables.
-        Mutex mReadoutMutex;
-        /*
-         * Readout Variables
-         */
-        Condition mReadoutAvailable;
-        Condition mReadoutComplete;
-        Buffers *mCapturedBuffers;
-        nsecs_t mCaptureTime;
-        RemoteSensorListener *mListener;
-
-        // Time of sensor startup (used for simulation zero-time point).
-        nsecs_t mStartupTime;
-
-    private:
-        /*
-         * Inherited Thread Virtual Overrides
-         */
-        virtual status_t readyToRun();
-        /*
-         * RemoteSensor capture operation main loop.
-         */
-        virtual bool threadLoop();
-
-        /*
-         * Members only used by the processing thread.
-         */
-        nsecs_t mNextCaptureTime;
-        Buffers *mNextCapturedBuffers;
-
-        void captureRGBA(uint8_t *img, uint32_t width, uint32_t height,
-                         uint32_t stride, int64_t *timestamp);
-        void captureRGB(uint8_t *img, uint32_t width, uint32_t height,
-                        uint32_t stride, int64_t *timestamp);
-        void captureNV21(uint8_t *img, uint32_t width, uint32_t height,
-                         uint32_t stride, int64_t *timestamp);
+        virtual void onRemoteSensorEvent(uint32_t frameNumber, Event e, nsecs_t timestamp) = 0;
+        virtual ~RemoteSensorListener();
     };
 
-}; // end of namespace android
+    void setRemoteSensorListener(RemoteSensorListener *listener);
 
-#endif // HW_EMULATOR_CAMERA2_REMOTE_SENSOR_H
+    virtual status_t setCameraFD(int socketFd);
+    virtual status_t cleanCameraFD(int socketFd);
+
+    /*
+     * Static Sensor Characteristics
+     */
+    const uint32_t mWidth, mHeight;
+    const uint32_t mActiveArray[4];
+
+    static const nsecs_t kExposureTimeRange[2];
+    static const nsecs_t kFrameDurationRange[2];
+    static const nsecs_t kMinVerticalBlank;
+
+    static const int32_t kSensitivityRange[2];
+    static const uint32_t kDefaultSensitivity;
+
+private:
+    int32_t mLastRequestWidth, mLastRequestHeight;
+
+    /*
+     * Defines possible states of the virtual camera device object.
+     */
+    enum VirtualCameraDeviceState {
+        // Object has been constructed.
+        ECDS_CONSTRUCTED,
+        // Object has been initialized.
+        ECDS_INITIALIZED,
+        // Object has been connected to the physical device.
+        ECDS_CONNECTED,
+        // Camera device has been started.
+        ECDS_STARTED,
+    };
+    // Object state.
+    VirtualCameraDeviceState mState;
+
+    CameraRemoteClient mCameraRemoteClient;
+    const char *mDeviceName;
+
+    // Always lock before accessing control parameters.
+    Mutex mControlMutex;
+    /*
+     * Control Parameters
+     */
+    Condition mVSync;
+    bool mGotVSync;
+    uint64_t mFrameDuration;
+    Buffers *mNextBuffers;
+    uint32_t mFrameNumber;
+
+    // Always lock before accessing readout variables.
+    Mutex mReadoutMutex;
+    /*
+     * Readout Variables
+     */
+    Condition mReadoutAvailable;
+    Condition mReadoutComplete;
+    Buffers *mCapturedBuffers;
+    nsecs_t mCaptureTime;
+    RemoteSensorListener *mListener;
+
+    // Time of sensor startup (used for simulation zero-time point).
+    nsecs_t mStartupTime;
+
+private:
+    /*
+     * Inherited Thread Virtual Overrides
+     */
+    virtual status_t readyToRun();
+    /*
+     * RemoteSensor capture operation main loop.
+     */
+    virtual bool threadLoop();
+
+    /*
+     * Members only used by the processing thread.
+     */
+    nsecs_t mNextCaptureTime;
+    Buffers *mNextCapturedBuffers;
+
+    void captureRGBA(uint8_t *img, uint32_t width, uint32_t height, uint32_t stride,
+                     int64_t *timestamp);
+    void captureRGB(uint8_t *img, uint32_t width, uint32_t height, uint32_t stride,
+                    int64_t *timestamp);
+    void captureNV21(uint8_t *img, uint32_t width, uint32_t height, uint32_t stride,
+                     int64_t *timestamp);
+};
+
+};  // end of namespace android
+
+#endif  // HW_EMULATOR_CAMERA2_REMOTE_SENSOR_H

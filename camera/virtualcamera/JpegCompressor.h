@@ -25,69 +25,64 @@
 #include "jpeg-stub/JpegStub.h"
 #include <utils/threads.h>
 
-namespace android
-{
+namespace android {
 
-    /* Encapsulates a converter between YV12, and JPEG formats.
-    */
-    class NV21JpegCompressor
-    {
-    public:
-        /* Constructs JpegCompressor instance. */
-        NV21JpegCompressor();
-        /* Destructs JpegCompressor instance. */
-        ~NV21JpegCompressor();
+/* Encapsulates a converter between YV12, and JPEG formats.
+ */
+class NV21JpegCompressor {
+public:
+    /* Constructs JpegCompressor instance. */
+    NV21JpegCompressor();
+    /* Destructs JpegCompressor instance. */
+    ~NV21JpegCompressor();
 
-        /****************************************************************************
-         * Public API
-         ***************************************************************************/
+    /****************************************************************************
+     * Public API
+     ***************************************************************************/
 
-    public:
-        /* Compresses raw NV21 image into a JPEG.
-        * The compressed image will be saved in mStream member of this class. Use
-        * getCompressedSize method to obtain buffer size of the compressed image,
-        * and getCompressedImage to copy out the compressed image.
-        * Param:
-        *  image - Raw NV21 image.
-        *  width, height - Image dimensions.
-        *  quality - JPEG quality.
-        *  exifData - an EXIF data structure to attach to the image, may be null
-        * Return:
-        *  NO_ERROR on success, or an appropriate error status.
-        *
-        */
-        status_t compressRawImage(const void *image,
-                                  int width,
-                                  int height,
-                                  int quality,
-                                  ExifData *exifData);
+public:
+    /* Compresses raw NV21 image into a JPEG.
+     * The compressed image will be saved in mStream member of this class. Use
+     * getCompressedSize method to obtain buffer size of the compressed image,
+     * and getCompressedImage to copy out the compressed image.
+     * Param:
+     *  image - Raw NV21 image.
+     *  width, height - Image dimensions.
+     *  quality - JPEG quality.
+     *  exifData - an EXIF data structure to attach to the image, may be null
+     * Return:
+     *  NO_ERROR on success, or an appropriate error status.
+     *
+     */
+    status_t compressRawImage(const void *image, int width, int height, int quality,
+                              ExifData *exifData);
 
-        /* Get size of the compressed JPEG buffer.
-        * This method must be called only after a successful completion of
-        * compressRawImage call.
-        * Return:
-        *  Size of the compressed JPEG buffer.
-        */
-        size_t getCompressedSize();
+    /* Get size of the compressed JPEG buffer.
+     * This method must be called only after a successful completion of
+     * compressRawImage call.
+     * Return:
+     *  Size of the compressed JPEG buffer.
+     */
+    size_t getCompressedSize();
 
-        /* Copies out compressed JPEG buffer.
-        * This method must be called only after a successful completion of
-        * compressRawImage call.
-        * Param:
-        *  buff - Buffer where to copy the JPEG. Must be large enough to contain the
-        *      entire image.
-        */
-        void getCompressedImage(void *buff);
+    /* Copies out compressed JPEG buffer.
+     * This method must be called only after a successful completion of
+     * compressRawImage call.
+     * Param:
+     *  buff - Buffer where to copy the JPEG. Must be large enough to contain the
+     *      entire image.
+     */
+    void getCompressedImage(void *buff);
 
-        /****************************************************************************
-         * Class data
-         ***************************************************************************/
+    /****************************************************************************
+     * Class data
+     ***************************************************************************/
 
-    private:
-        // library handle to dlopen
-        static void *mDl;
-        JpegStub mStub;
-    };
+private:
+    // library handle to dlopen
+    static void *mDl;
+    JpegStub mStub;
+};
 
 }; /* namespace android */
 

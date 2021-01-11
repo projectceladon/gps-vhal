@@ -29,18 +29,17 @@ using ::android::hardware::camera::common::V1_0::helper::Size;
 
 using ::android::hardware::camera::common::V1_0::helper::CameraMetadata;
 
-namespace android
-{
-    /* Create an EXIF data structure based on camera parameters. This includes
-    * things like GPS information that has been set by the camera client.
-    * First for Camera HAL1 and the second for Camera HAL3.
-    */
-    ExifData *createExifData(const CameraParameters &parameters);
-    ExifData *createExifData(const CameraMetadata &params, int width, int height);
+namespace android {
+/* Create an EXIF data structure based on camera parameters. This includes
+ * things like GPS information that has been set by the camera client.
+ * First for Camera HAL1 and the second for Camera HAL3.
+ */
+ExifData *createExifData(const CameraParameters &parameters);
+ExifData *createExifData(const CameraMetadata &params, int width, int height);
 
-    /* Free EXIF data created in the createExifData call */
-    void freeExifData(ExifData *exifData);
+/* Free EXIF data created in the createExifData call */
+void freeExifData(ExifData *exifData);
 
-} // namespace android
+}  // namespace android
 
-#endif // GOLDFISH_CAMERA_EXIF_H
+#endif  // GOLDFISH_CAMERA_EXIF_H

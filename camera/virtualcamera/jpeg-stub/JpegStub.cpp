@@ -24,48 +24,37 @@
 
 #include "Compressor.h"
 
-extern "C" void JpegStub_init(JpegStub *stub)
-{
+extern "C" void JpegStub_init(JpegStub *stub) {
     stub->mCompressor = static_cast<void *>(new Compressor());
 }
 
-extern "C" void JpegStub_cleanup(JpegStub *stub)
-{
+extern "C" void JpegStub_cleanup(JpegStub *stub) {
     delete reinterpret_cast<Compressor *>(stub->mCompressor);
     stub->mCompressor = nullptr;
 }
 
-extern "C" int JpegStub_compress(JpegStub *stub,
-                                 const void *buffer,
-                                 int width,
-                                 int height,
-                                 int quality,
-                                 ExifData *exifData)
-{
+extern "C" int JpegStub_compress(JpegStub *stub, const void *buffer, int width, int height,
+                                 int quality, ExifData *exifData) {
     Compressor *compressor = reinterpret_cast<Compressor *>(stub->mCompressor);
 
-    if (compressor->compress(reinterpret_cast<const unsigned char *>(buffer),
-                             width, height, quality, exifData))
-    {
-        ALOGV("%s: Compressed JPEG: %d[%dx%d] -> %zu bytes",
-              __FUNCTION__, (width * height * 12) / 8,
-              width, height, compressor->getCompressedData().size());
+    if (compressor->compress(reinterpret_cast<const unsigned char *>(buffer), width, height,
+                             quality, exifData)) {
+        ALOGV("%s: Compressed JPEG: %d[%dx%d] -> %zu bytes", __FUNCTION__,
+              (width * height * 12) / 8, width, height, compressor->getCompressedData().size());
         return 0;
     }
     ALOGE("%s: JPEG compression failed", __FUNCTION__);
     return errno ? errno : EINVAL;
 }
 
-extern "C" void JpegStub_getCompressedImage(JpegStub *stub, void *buff)
-{
+extern "C" void JpegStub_getCompressedImage(JpegStub *stub, void *buff) {
     Compressor *compressor = reinterpret_cast<Compressor *>(stub->mCompressor);
 
     const std::vector<unsigned char> &data = compressor->getCompressedData();
     memcpy(buff, &data[0], data.size());
 }
 
-extern "C" size_t JpegStub_getCompressedSize(JpegStub *stub)
-{
+extern "C" size_t JpegStub_getCompressedSize(JpegStub *stub) {
     Compressor *compressor = reinterpret_cast<Compressor *>(stub->mCompressor);
 
     return compressor->getCompressedData().size();

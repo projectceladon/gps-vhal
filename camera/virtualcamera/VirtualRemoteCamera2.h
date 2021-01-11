@@ -25,43 +25,39 @@
 
 #include "VirtualCamera2.h"
 
-namespace android
-{
+namespace android {
 
-    /* Encapsulates functionality of an advanced fake camera based on real host camera data.
-    */
-    class VirtualRemoteCamera2 : public VirtualCamera2
-    {
-    public:
-        /* Constructs VirtualFakeCamera instance. */
-        VirtualRemoteCamera2(int cameraId, bool facingBack, struct hw_module_t *module);
+/* Encapsulates functionality of an advanced fake camera based on real host camera data.
+ */
+class VirtualRemoteCamera2 : public VirtualCamera2 {
+public:
+    /* Constructs VirtualFakeCamera instance. */
+    VirtualRemoteCamera2(int cameraId, bool facingBack, struct hw_module_t *module);
 
-        /* Destructs VirtualFakeCamera instance. */
-        ~VirtualRemoteCamera2();
+    /* Destructs VirtualFakeCamera instance. */
+    ~VirtualRemoteCamera2();
 
-        /****************************************************************************
-         * VirtualCamera2 virtual overrides.
-         ***************************************************************************/
+    /****************************************************************************
+     * VirtualCamera2 virtual overrides.
+     ***************************************************************************/
 
-    public:
-        /* Initializes VirtualRemoteCamera2 instance. */
-        status_t Initialize(const char *device_name,
-                            const char *frame_dims,
-                            const char *facing_dir);
+public:
+    /* Initializes VirtualRemoteCamera2 instance. */
+    status_t Initialize(const char *device_name, const char *frame_dims, const char *facing_dir);
 
-        /****************************************************************************
-         * VirtualCamera abstract API implementation.
-         ***************************************************************************/
+    /****************************************************************************
+     * VirtualCamera abstract API implementation.
+     ***************************************************************************/
 
-    protected:
-        /****************************************************************************
-         * Data memebers.
-         ***************************************************************************/
+protected:
+    /****************************************************************************
+     * Data memebers.
+     ***************************************************************************/
 
-    protected:
-        /* Facing back (true) or front (false) switch. */
-        bool mFacingBack;
-    };
+protected:
+    /* Facing back (true) or front (false) switch. */
+    bool mFacingBack;
+};
 
 }; /* namespace android */
 

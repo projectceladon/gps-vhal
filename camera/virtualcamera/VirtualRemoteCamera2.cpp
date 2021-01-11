@@ -27,32 +27,23 @@
 #include "VirtualRemoteCamera2.h"
 #include "VirtualCameraFactory.h"
 
-namespace android
-{
+namespace android {
 
-    VirtualRemoteCamera2::VirtualRemoteCamera2(int cameraId,
-                                               bool facingBack,
-                                               struct hw_module_t *module)
-        : VirtualCamera2(cameraId, module),
-          mFacingBack(facingBack)
-    {
-        ALOGD("Constructing virtual remote camera 2 facing %s",
-              facingBack ? "back" : "front");
-    }
+VirtualRemoteCamera2::VirtualRemoteCamera2(int cameraId, bool facingBack,
+                                           struct hw_module_t *module)
+    : VirtualCamera2(cameraId, module), mFacingBack(facingBack) {
+    ALOGD("Constructing virtual remote camera 2 facing %s", facingBack ? "back" : "front");
+}
 
-    VirtualRemoteCamera2::~VirtualRemoteCamera2()
-    {
-    }
+VirtualRemoteCamera2::~VirtualRemoteCamera2() {}
 
-    /****************************************************************************
-     * Public API overrides
-     ***************************************************************************/
+/****************************************************************************
+ * Public API overrides
+ ***************************************************************************/
 
-    status_t VirtualRemoteCamera2::Initialize(const char *device_name,
-                            const char *frame_dims,
-                            const char *facing_dir)
-    {
-        return NO_ERROR;
-    }
+status_t VirtualRemoteCamera2::Initialize(const char *device_name, const char *frame_dims,
+                                          const char *facing_dir) {
+    return NO_ERROR;
+}
 
 }; /* namespace android */

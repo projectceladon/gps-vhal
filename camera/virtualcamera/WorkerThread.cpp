@@ -22,80 +22,64 @@
 
 #include <algorithm>
 
-namespace android
-{
+namespace android {
 
-    WorkerThread::WorkerThread(const char *threadName,
-                               VirtualCameraDevice *cameraDevice,
-                               VirtualCamera *cameraHAL)
-        : Thread(true), // Callbacks may involve Java calls.
-          mCameraDevice(cameraDevice),
-          mCameraHAL(cameraHAL),
-          mRunning(false),
-          mThreadName(threadName)
+WorkerThread::WorkerThread(const char *threadName, VirtualCameraDevice *cameraDevice,
+                           VirtualCamera *cameraHAL)
+    : Thread(true),  // Callbacks may involve Java calls.
+      mCameraDevice(cameraDevice),
+      mCameraHAL(cameraHAL),
+      mRunning(false),
+      mThreadName(threadName) {}
+
+status_t WorkerThread::startThread(bool oneBurst) {
+    ALOGE(" Starting worker thread, oneBurst=%s", oneBurst ? "true" : "false");
+    mOneBurst = oneBurst;
     {
-    }
-
-    status_t WorkerThread::startThread(bool oneBurst)
-    {
-        ALOGE(" Starting worker thread, oneBurst=%s", oneBurst ? "true" : "false");
-        mOneBurst = oneBurst;
-        {
-            Mutex::Autolock lock(mRunningMutex);
-            mRunning = true;
-        }
-        return run(mThreadName, ANDROID_PRIORITY_URGENT_DISPLAY, 0);
-    }
-
-    status_t WorkerThread::stopThread()
-    {
-        ALOGE(" %s: Stopping worker thread...", __FUNCTION__);
-
         Mutex::Autolock lock(mRunningMutex);
-        mRunning = false;
-        mRunningCondition.signal();
-        return NO_ERROR;
+        mRunning = true;
     }
+    return run(mThreadName, ANDROID_PRIORITY_URGENT_DISPLAY, 0);
+}
 
-    status_t WorkerThread::wakeThread()
-    {
-        ALOGE(" %s: Waking virtual camera device's worker thread...", __FUNCTION__);
+status_t WorkerThread::stopThread() {
+    ALOGE(" %s: Stopping worker thread...", __FUNCTION__);
 
-        mRunningCondition.signal();
-        return NO_ERROR;
+    Mutex::Autolock lock(mRunningMutex);
+    mRunning = false;
+    mRunningCondition.signal();
+    return NO_ERROR;
+}
+
+status_t WorkerThread::wakeThread() {
+    ALOGE(" %s: Waking virtual camera device's worker thread...", __FUNCTION__);
+
+    mRunningCondition.signal();
+    return NO_ERROR;
+}
+
+status_t WorkerThread::joinThread() { return join(); }
+
+status_t WorkerThread::readyToRun() {
+    status_t res = onThreadStart();
+    if (res != NO_ERROR) {
+        return res;
     }
+    return NO_ERROR;
+}
 
-    status_t WorkerThread::joinThread()
-    {
-        return join();
-    }
-
-    status_t WorkerThread::readyToRun()
-    {
-        status_t res = onThreadStart();
-        if (res != NO_ERROR)
-        {
-            return res;
+bool WorkerThread::threadLoop() {
+    if (inWorkerThread() && !mOneBurst) {
+        /* Only return true if we're running. If mRunning has been set to false
+         * we fall through to ensure that onThreadExit is called. */
+        Mutex::Autolock lock(mRunningMutex);
+        if (mRunning) {
+            return true;
         }
-        return NO_ERROR;
     }
+    onThreadExit();
+    ALOGE(" %s: Exiting thread, mOneBurst=%s", __FUNCTION__, mOneBurst ? "true" : "false");
+    return false;
+}
 
-    bool WorkerThread::threadLoop()
-    {
-        if (inWorkerThread() && !mOneBurst)
-        {
-            /* Only return true if we're running. If mRunning has been set to false
-            * we fall through to ensure that onThreadExit is called. */
-            Mutex::Autolock lock(mRunningMutex);
-            if (mRunning)
-            {
-                return true;
-            }
-        }
-        onThreadExit();
-        ALOGE(" %s: Exiting thread, mOneBurst=%s",
-              __FUNCTION__, mOneBurst ? "true" : "false");
-        return false;
-    }
-
-} // namespace android
+}  // namespace android

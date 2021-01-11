@@ -33,81 +33,76 @@
 
 #include <stdio.h>
 
-extern "C"
-{
+extern "C" {
 #include <jpeglib.h>
 }
 
 using ::android::hardware::camera::common::V1_0::helper::CameraMetadata;
 
-namespace android
-{
+namespace android {
 
-    class JpegCompressor : private Thread, public virtual RefBase
-    {
-    public:
-        JpegCompressor();
-        ~JpegCompressor();
+class JpegCompressor : private Thread, public virtual RefBase {
+public:
+    JpegCompressor();
+    ~JpegCompressor();
 
-        struct JpegListener
-        {
-            // Called when JPEG compression has finished, or encountered an error
-            virtual void onJpegDone(const StreamBuffer &jpegBuffer,
-                                    bool success) = 0;
-            // Called when the input buffer for JPEG is not needed any more,
-            // if the buffer came from the framework.
-            virtual void onJpegInputDone(const StreamBuffer &inputBuffer) = 0;
-            virtual ~JpegListener();
-        };
-
-        // Start compressing COMPRESSED format buffers; JpegCompressor takes
-        // ownership of the Buffers vector.
-        // Reserve() must be called first.
-        status_t start(Buffers *buffers, JpegListener *listener, CameraMetadata *settings);
-
-        // Compress and block until buffer is complete.
-        status_t compressSynchronous(Buffers *buffers);
-
-        status_t cancel();
-
-        bool isBusy();
-        bool isStreamInUse(uint32_t id);
-
-        bool waitForDone(nsecs_t timeout);
-
-        // Reserve the compressor for a later start() call.
-        status_t reserve();
-
-        // TODO: Measure this
-        static const size_t kMaxJpegSize = 300000;
-
-    private:
-        Mutex mBusyMutex;
-        bool mIsBusy;
-        Condition mDone;
-        bool mSynchronous;
-
-        Mutex mMutex;
-
-        Buffers *mBuffers;
-        JpegListener *mListener;
-
-        StreamBuffer mJpegBuffer, mAuxBuffer;
-        bool mFoundJpeg, mFoundAux;
-        CameraMetadata mSettings;
-
-        status_t compress();
-
-        void cleanUp();
-
-        /**
-         * Inherited Thread virtual overrides
-         */
-    private:
-        virtual status_t readyToRun();
-        virtual bool threadLoop();
+    struct JpegListener {
+        // Called when JPEG compression has finished, or encountered an error
+        virtual void onJpegDone(const StreamBuffer &jpegBuffer, bool success) = 0;
+        // Called when the input buffer for JPEG is not needed any more,
+        // if the buffer came from the framework.
+        virtual void onJpegInputDone(const StreamBuffer &inputBuffer) = 0;
+        virtual ~JpegListener();
     };
 
-} // namespace android
+    // Start compressing COMPRESSED format buffers; JpegCompressor takes
+    // ownership of the Buffers vector.
+    // Reserve() must be called first.
+    status_t start(Buffers *buffers, JpegListener *listener, CameraMetadata *settings);
+
+    // Compress and block until buffer is complete.
+    status_t compressSynchronous(Buffers *buffers);
+
+    status_t cancel();
+
+    bool isBusy();
+    bool isStreamInUse(uint32_t id);
+
+    bool waitForDone(nsecs_t timeout);
+
+    // Reserve the compressor for a later start() call.
+    status_t reserve();
+
+    // TODO: Measure this
+    static const size_t kMaxJpegSize = 300000;
+
+private:
+    Mutex mBusyMutex;
+    bool mIsBusy;
+    Condition mDone;
+    bool mSynchronous;
+
+    Mutex mMutex;
+
+    Buffers *mBuffers;
+    JpegListener *mListener;
+
+    StreamBuffer mJpegBuffer, mAuxBuffer;
+    bool mFoundJpeg, mFoundAux;
+    CameraMetadata mSettings;
+
+    status_t compress();
+
+    void cleanUp();
+
+    /**
+     * Inherited Thread virtual overrides
+     */
+private:
+    virtual status_t readyToRun();
+    virtual bool threadLoop();
+};
+
+}  // namespace android
 
 #endif
