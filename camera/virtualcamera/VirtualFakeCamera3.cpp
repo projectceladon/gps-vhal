@@ -440,7 +440,7 @@ status_t VirtualFakeCamera3::configureStreams(camera3_stream_configuration *stre
      * Can't reuse settings across configure call
      */
     mPrevSettings.clear();
-
+    mSensor->setConfiguredStreamsCount(mStreams.size());
     return OK;
 }
 

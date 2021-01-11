@@ -118,7 +118,8 @@ Sensor::Sensor(uint32_t width, uint32_t height)
       mFrameNumber(0),
       mCapturedBuffers(NULL),
       mListener(NULL),
-      mScene(width, height, kElectronsPerLuxSecond) {
+      mScene(width, height, kElectronsPerLuxSecond),
+      mNumConfiguredStreams(0) {
     // ALOGE("Sensor created with pixel array %d x %d", width,
     // height);
 }
@@ -166,6 +167,10 @@ status_t Sensor::shutDown() {
         ALOGE("Unable to shut down sensor capture thread: %d", res);
     }
     return res;
+}
+
+void Sensor::setConfiguredStreamsCount(size_t streamCount) {
+    mNumConfiguredStreams = streamCount;
 }
 
 Scene &Sensor::getScene() { return mScene; }
@@ -617,7 +622,7 @@ void Sensor::captureNV21(uint8_t *img, uint32_t gain, uint32_t width, uint32_t h
             ALOGVV(LOG_TAG " %s: [SG1] getBufferUsage %d", __FUNCTION__, useflag);
 
             // WR: rura app, OAM-94702
-            if (useflag == 6) {
+            if (useflag == 6 && 1 == mNumConfiguredStreams) {
                 ALOGVV(LOG_TAG " %s: [rura] [SG1] convert I420 to NV21!", __FUNCTION__);
                 if (int ret = libyuv::I420ToNV21(pTempY, srcWidth, pTempU, srcWidth >> 1, pTempV,
                                                  srcWidth >> 1, img, width, dst_vu, width, width,
