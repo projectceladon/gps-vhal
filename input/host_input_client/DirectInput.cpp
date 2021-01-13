@@ -4,16 +4,19 @@
 #include "DirectInput.h"
 //#include "Log.h"
 
-DirectInputReceiver::DirectInputReceiver(int id)
+DirectInputReceiver::DirectInputReceiver(int id, int inputId)
 {
-    printf("%s\n", __func__);
-
-    CreateTouchDevice(id);
+    if ((mDebug & 0x1) > 0)
+        printf("%s\n", __func__);
+    mInstanceId = id;
+    mInputId = inputId;
+    CreateTouchDevice(id, inputId);
 }
 
 DirectInputReceiver::~DirectInputReceiver()
 {
-    printf("%s\n", __func__);
+    if ((mDebug & 0x1) > 0)
+        printf("%s\n", __func__);
 
     if (mFd >= 0)
     {
@@ -21,9 +24,10 @@ DirectInputReceiver::~DirectInputReceiver()
     }
 }
 
-bool DirectInputReceiver::CreateTouchDevice(int id)
+bool DirectInputReceiver::CreateTouchDevice(int id, int inputId)
 {
-    printf("%s\n", __func__);
+    if ((mDebug & 0x1) > 0)
+        printf("%s\n", __func__);
 
     // Todo: use socket to support multiple input for each display
     char path[256];
@@ -39,7 +43,7 @@ bool DirectInputReceiver::CreateTouchDevice(int id)
     }
     else
     {
-        snprintf(path, 256, "%s/%s%d", "./workdir", kDevName, id);
+        snprintf(path, 256, "%s/%s%d-%d", "./workdir", kDevName, id, inputId);
     }
 
     mFd = open(path, O_RDWR | O_NONBLOCK, 0);
@@ -62,7 +66,7 @@ bool DirectInputReceiver::SendEvent(uint16_t type,
 
     if (mFd < 0)
     {
-        CreateTouchDevice(0);
+        CreateTouchDevice(mInstanceId, mInputId);
         if (mFd < 0)
             return false;
     }
@@ -88,7 +92,8 @@ bool DirectInputReceiver::SendDown(int32_t slot,
                                    int32_t y,
                                    int32_t pressure)
 {
-    printf("%s\n", __func__);
+    if ((mDebug & 0x1) > 0)
+        printf("%s\n", __func__);
 
     if ((uint32_t)slot >= kMaxSlot)
     {
@@ -120,7 +125,8 @@ bool DirectInputReceiver::SendDown(int32_t slot,
 
 bool DirectInputReceiver::SendUp(int32_t slot, int32_t x, int32_t y)
 {
-    printf("%s\n", __func__);
+    if ((mDebug & 0x1) > 0)
+        printf("%s\n", __func__);
 
     if (mEnabledSlots == 0 || (uint32_t)slot >= kMaxSlot ||
         !mContacts[slot].enabled)
@@ -145,7 +151,8 @@ bool DirectInputReceiver::SendMove(int32_t slot,
                                    int32_t y,
                                    int32_t pressure)
 {
-    printf("%s\n", __func__);
+    if ((mDebug & 0x1) > 0)
+        printf("%s\n", __func__);
 
     if ((uint32_t)slot >= kMaxSlot || !mContacts[slot].enabled)
     {
@@ -164,7 +171,8 @@ bool DirectInputReceiver::SendMove(int32_t slot,
 
 bool DirectInputReceiver::SendCommit()
 {
-    printf("%s\n", __func__);
+    if ((mDebug & 0x1) > 0)
+        printf("%s\n", __func__);
 
     SendEvent(EV_SYN, SYN_REPORT, 0);
     return true;
@@ -172,7 +180,8 @@ bool DirectInputReceiver::SendCommit()
 
 bool DirectInputReceiver::SendReset()
 {
-    printf("%s\n", __func__);
+    if ((mDebug & 0x1) > 0)
+        printf("%s\n", __func__);
 
     bool report = false;
     for (uint32_t slot = 0; slot < kMaxSlot; slot++)
@@ -192,14 +201,16 @@ bool DirectInputReceiver::SendReset()
 
 void DirectInputReceiver::SendWait(uint32_t ms)
 {
-    printf("%s\n", __func__);
+    if ((mDebug & 0x1) > 0)
+        printf("%s\n", __func__);
 
     usleep(ms * 1000);
 }
 
 bool DirectInputReceiver::ProcessOneCommand(const std::string &cmd)
 {
-    printf("%s\n", __func__);
+    if ((mDebug & 0x1) > 0)
+        printf("%s\n", __func__);
 
     char type = 0;
     int32_t slot = 0;
@@ -213,7 +224,8 @@ bool DirectInputReceiver::ProcessOneCommand(const std::string &cmd)
     switch (cmd[0])
     {
     case 'c': // commit
-        printf("SendCommit\n");
+        if ((mDebug & 0x1) > 0)
+            printf("SendCommit\n");
         SendCommit();
         break;
     case 'r': // reset
@@ -221,17 +233,20 @@ bool DirectInputReceiver::ProcessOneCommand(const std::string &cmd)
         break;
     case 'd': // down
         sscanf(cmd.c_str(), "%c %d %d %d %d", &type, &slot, &x, &y, &pressure);
-        printf("SendDown slot %d, x %d, y %d, pressure %d\n", slot, x, y, pressure);
+        if ((mDebug & 0x1) > 0)
+            printf("SendDown slot %d, x %d, y %d, pressure %d\n", slot, x, y, pressure);
         SendDown(slot, x, y, pressure);
         break;
     case 'u': // up
         sscanf(cmd.c_str(), "%c %d %d %d", &type, &slot, &x, &y);
-        printf("SendUp slot %d\n", slot);
+        if ((mDebug & 0x1) > 0)
+            printf("SendUp slot %d\n", slot);
         SendUp(slot, x, y);
         break;
     case 'm': // move
         sscanf(cmd.c_str(), "%c %d %d %d %d", &type, &slot, &x, &y, &pressure);
-        printf("SendMove slot %d, x %d, y %d, pressure %d\n", slot, x, y, pressure);
+        if ((mDebug & 0x1) > 0)
+            printf("SendMove slot %d, x %d, y %d, pressure %d\n", slot, x, y, pressure);
         SendMove(slot, x, y, pressure);
         break;
     case 'w': // wait ms
@@ -244,9 +259,49 @@ bool DirectInputReceiver::ProcessOneCommand(const std::string &cmd)
     return true;
 }
 
+bool DirectInputReceiver::joystickEnable()
+{
+    if (mDebug)
+        if ((mDebug & 0x1) > 0)
+            printf("%s:%d enable joystick down\n", __func__, __LINE__);
+    onJoystickMessage("k 631 1\n");
+    onJoystickMessage("c\n");
+    usleep(2000);
+    if (mDebug)
+        if ((mDebug & 0x1) > 0)
+            printf("%s:%d enable joystick up\n", __func__, __LINE__);
+    onJoystickMessage("k 631 0\n");
+    onJoystickMessage("c\n");
+    mJoystickStatus = true;
+    return true;
+}
+
+bool DirectInputReceiver::joystickDisable()
+{
+    if (mDebug)
+        if ((mDebug & 0x1) > 0)
+            printf("%s:%d disable joystick down\n", __func__, __LINE__);
+    onJoystickMessage("k 632 1\n");
+    onJoystickMessage("c\n");
+    usleep(2000);
+    if (mDebug)
+        if ((mDebug & 0x1) > 0)
+            printf("%s:%d disable joystick up\n", __func__, __LINE__);
+    onJoystickMessage("k 632 0\n");
+    onJoystickMessage("c\n");
+    mJoystickStatus = false;
+    return true;
+}
+
+bool DirectInputReceiver::getJoystickStatus()
+{
+    return mJoystickStatus;
+}
+
 bool DirectInputReceiver::ProcessOneJoystickCommand(const std::string &cmd)
 {
-    printf("%s\n", __func__);
+    if ((mDebug & 0x1) > 0)
+        printf("%s\n", __func__);
 
     char type = 0;
     uint16_t code;
@@ -255,25 +310,29 @@ bool DirectInputReceiver::ProcessOneJoystickCommand(const std::string &cmd)
     switch (cmd[0])
     {
     case 'c': // Commit
-        printf("SendCommit\n");
+        if ((mDebug & 0x1) > 0)
+            printf("SendCommit\n");
         SendCommit();
         break;
 
     case 'k': // EV_KEY 1
         sscanf(cmd.c_str(), "%c %" SCNu16 " %" SCNd32, &type, &code, &value);
-        printf("code = %d, value = %d\n", code, value);
+        if ((mDebug & 0x1) > 0)
+            printf("code = %d, value = %d\n", code, value);
         SendEvent(EV_KEY, code, value);
         break;
 
     case 'm': // EV_MSC 4
         sscanf(cmd.c_str(), "%c %" SCNu16 " %" SCNd32, &type, &code, &value);
-        printf("code = %d, value = %d\n", code, value);
+        if ((mDebug & 0x1) > 0)
+            printf("code = %d, value = %d\n", code, value);
         SendEvent(EV_MSC, code, value);
         break;
 
     case 'a': // EV_ABS 3
         sscanf(cmd.c_str(), "%c %" SCNu16 " %" SCNd32, &type, &code, &value);
-        printf("code = %d, value = %d\n", code, value);
+        if ((mDebug & 0x1) > 0)
+            printf("code = %d, value = %d\n", code, value);
         SendEvent(EV_ABS, code, value);
         break;
     default:
@@ -284,7 +343,8 @@ bool DirectInputReceiver::ProcessOneJoystickCommand(const std::string &cmd)
 
 int DirectInputReceiver::getTouchInfo(TouchInfo *info)
 {
-    printf("%s\n", __func__);
+    if ((mDebug & 0x1) > 0)
+        printf("%s\n", __func__);
 
     if (!info)
     {
@@ -302,7 +362,8 @@ int DirectInputReceiver::getTouchInfo(TouchInfo *info)
 }
 int DirectInputReceiver::onInputMessage(const std::string &msg)
 {
-    printf("%s\n", __func__);
+    if ((mDebug & 0x1) > 0)
+        printf("%s\n", __func__);
 
     size_t begin = 0;
     size_t end = 0;
@@ -326,7 +387,8 @@ int DirectInputReceiver::onInputMessage(const std::string &msg)
 
 int DirectInputReceiver::onKeyCode(uint16_t scanCode, uint32_t mask)
 {
-    printf("%s\n", __func__);
+    if ((mDebug & 0x1) > 0)
+        printf("%s\n", __func__);
 
     if (mask & KEY_STATE_MASK::Shift)
     {
@@ -369,7 +431,8 @@ int DirectInputReceiver::onKeyCode(uint16_t scanCode, uint32_t mask)
 
 int DirectInputReceiver::onJoystickMessage(const std::string &msg)
 {
-    printf("%s\n", __func__);
+    if ((mDebug & 0x1) > 0)
+        printf("%s\n", __func__);
 
     size_t begin = 0;
     size_t end = 0;
@@ -393,14 +456,16 @@ int DirectInputReceiver::onJoystickMessage(const std::string &msg)
 
 int DirectInputReceiver::onKeyChar(char ch)
 {
-    printf("%s\n", __func__);
+    if ((mDebug & 0x1) > 0)
+        printf("%s\n", __func__);
 
     return 0;
 }
 
 int DirectInputReceiver::onText(const char *msg)
 {
-    printf("%s\n", __func__);
+    if ((mDebug & 0x1) > 0)
+        printf("%s\n", __func__);
 
     return 0;
 }
