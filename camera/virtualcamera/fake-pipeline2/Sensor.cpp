@@ -118,8 +118,7 @@ Sensor::Sensor(uint32_t width, uint32_t height)
       mFrameNumber(0),
       mCapturedBuffers(NULL),
       mListener(NULL),
-      mScene(width, height, kElectronsPerLuxSecond),
-      mNumConfiguredStreams(0) {
+      mScene(width, height, kElectronsPerLuxSecond) {
     // ALOGE("Sensor created with pixel array %d x %d", width,
     // height);
 }
@@ -167,10 +166,6 @@ status_t Sensor::shutDown() {
         ALOGE("Unable to shut down sensor capture thread: %d", res);
     }
     return res;
-}
-
-void Sensor::setConfiguredStreamsCount(size_t streamCount) {
-    mNumConfiguredStreams = streamCount;
 }
 
 Scene &Sensor::getScene() { return mScene; }
@@ -618,22 +613,10 @@ void Sensor::captureNV21(uint8_t *img, uint32_t gain, uint32_t width, uint32_t h
     if (width == (uint32_t)srcWidth && height == (uint32_t)srcHeight) {
         ALOGVV(" %s: Not scaling dstWidth: %d dstHeight: %d", __FUNCTION__, width, height);
         if (m_major_version == 1) {
-            int useflag = (int)getBufferUsage();
-            ALOGVV(LOG_TAG " %s: [SG1] getBufferUsage %d", __FUNCTION__, useflag);
-
-            // WR: rura app, OAM-94702
-            if (useflag == 6 && 1 == mNumConfiguredStreams) {
-                ALOGVV(LOG_TAG " %s: [rura] [SG1] convert I420 to NV21!", __FUNCTION__);
-                if (int ret = libyuv::I420ToNV21(pTempY, srcWidth, pTempU, srcWidth >> 1, pTempV,
-                                                 srcWidth >> 1, img, width, dst_vu, width, width,
-                                                 height)) {
-                }
-            } else {
-                ALOGVV(LOG_TAG " %s: [SG1] convert I420 to NV12!", __FUNCTION__);
-                if (int ret = libyuv::I420ToNV12(pTempY, srcWidth, pTempU, srcWidth >> 1, pTempV,
-                                                 srcWidth >> 1, img, width, dst_vu, width, width,
-                                                 height)) {
-                }
+            ALOGVV(LOG_TAG " %s: [SG1] convert I420 to NV12!", __FUNCTION__);
+            if (int ret = libyuv::I420ToNV12(pTempY, srcWidth, pTempU, srcWidth >> 1, pTempV,
+                                             srcWidth >> 1, img, width, dst_vu, width, width,
+                                             height)) {
             }
         } else {
             ALOGVV(LOG_TAG " %s: [NON-SG1] convert I420 to NV21!", __FUNCTION__);

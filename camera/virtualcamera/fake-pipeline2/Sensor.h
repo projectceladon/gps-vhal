@@ -106,15 +106,6 @@ public:
     Scene &getScene();
 
     /*
-     * Sets the number of streams received as part of
-     * configureStreams call.
-     *
-     * It will be used as input to determine the capture frame
-     * format NV12 or NV21.
-     */
-    void setConfiguredStreamsCount(size_t streamCount);
-
-    /*
      * Controls that can be updated every frame
      */
 
@@ -239,7 +230,6 @@ private:
 
     Scene mScene;
 
-    size_t mNumConfiguredStreams;
     void captureRaw(uint8_t *img, uint32_t gain, uint32_t stride);
     void captureRGBA(uint8_t *img, uint32_t gain, uint32_t width, uint32_t height);
     void captureRGB(uint8_t *img, uint32_t gain, uint32_t width, uint32_t height);
@@ -259,11 +249,6 @@ private:
     // vHAL buffer
     int srcWidth = 640;
     int srcHeight = 480;
-
-public:
-    uint64_t useflag;
-    void setBufferUsage(uint64_t flag) { useflag = flag; }
-    uint64_t getBufferUsage() { return useflag; }
 };
 }  // namespace android
 
