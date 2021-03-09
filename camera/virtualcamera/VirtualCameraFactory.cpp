@@ -19,7 +19,7 @@
  * available for emulation.
  */
 
-#define LOG_NDEBUG 0
+//#define LOG_NDEBUG 0
 #define LOG_TAG "VirtualCamera_Factory"
 
 #include "VirtualCameraFactory.h"
@@ -30,6 +30,7 @@
 #include "VirtualRemoteCamera.h"
 #include "VirtualRemoteCamera3.h"
 #include "CameraSocketServerThread.h"
+#include "cg_codec.h"
 
 #include <log/log.h>
 #include <cutils/properties.h>
@@ -43,6 +44,21 @@ extern camera_module_t HAL_MODULE_INFO_SYM;
 android::VirtualCameraFactory gVirtualCameraFactory;
 
 namespace android {
+
+bool gIsInFrameI420;
+bool gIsInFrameH264;
+
+void VirtualCameraFactory::readInputFrameFormat() {
+    char prop_val[PROPERTY_VALUE_MAX] = {'\0'};
+
+    property_get("ro.vendor.camera.in_frame_format.h264", prop_val, "false");
+    gIsInFrameH264 = !strcmp(prop_val, "true");
+
+    property_get("ro.vendor.camera.in_frame_format.i420", prop_val, "false");
+    gIsInFrameI420 = !strcmp(prop_val, "true");
+
+    ALOGI("%s - gIsInFrameH264: %d, gIsInFrameI420: %d", __func__, gIsInFrameH264, gIsInFrameI420);
+}
 
 VirtualCameraFactory::VirtualCameraFactory()
     : mRemoteClient(),
@@ -85,12 +101,24 @@ VirtualCameraFactory::VirtualCameraFactory()
         }
     }
 
+    readInputFrameFormat();
+
+    if (gIsInFrameH264) {
+        // create decoder
+        ALOGV("%s Creating decoder.", __func__);
+        mDecoder = std::make_shared<CGVideoDecoder>();
+    }
+
+    // create socket server who push packets to decoder
+    createSocketServer(mDecoder);
+    ALOGV("%s socket server created: ", __func__);
+
     // Create fake cameras, if enabled.
     if (isFakeCameraEmulationOn(/* backCamera */ true)) {
-        createFakeCamera(/* backCamera */ true);
+        createFakeCamera(mSocketServer, mDecoder, /* backCamera */ true);
     }
     if (isFakeCameraEmulationOn(/* backCamera */ false)) {
-        createFakeCamera(/* backCamera */ false);
+        createFakeCamera(mSocketServer, mDecoder, /* backCamera */ false);
     }
 
     ALOGI("%d cameras are being virtual. %d of them are fake cameras.", mVirtualCameraNum,
@@ -106,9 +134,23 @@ VirtualCameraFactory::VirtualCameraFactory()
         mHotplugThread->run("VirtualCameraHotplugThread");
     }
 
-    createSocketServer();
-
     mConstructedOK = true;
+}
+
+bool VirtualCameraFactory::createSocketServer(std::shared_ptr<CGVideoDecoder> decoder) {
+    ALOGV("%s: E", __FUNCTION__);
+
+    char id[PROPERTY_VALUE_MAX] = {0};
+    if (property_get("ro.boot.container.id", id, "") > 0) {
+        mSocketServer = std::make_shared<CameraSocketServerThread>(id, decoder);
+
+        mSocketServer->run("BackVirtualCameraSocketServerThread");
+    } else
+        ALOGE("%s: FATAL: container id is not set!!", __func__);
+
+    ALOGV("%s: X", __FUNCTION__);
+    // TODO need to return false if error.
+    return true;
 }
 
 VirtualCameraFactory::~VirtualCameraFactory() {
@@ -133,26 +175,10 @@ VirtualCameraFactory::~VirtualCameraFactory() {
         mRemoteClient.mCameraSocketFD = -1;
     }
 
-    if (mCSST != nullptr) {
-        mCSST->requestExit();
-        mCSST->join();
+    if (mSocketServer) {
+        mSocketServer->requestExit();
+        mSocketServer->join();
     }
-}
-
-bool VirtualCameraFactory::createSocketServer() {
-    ALOGI("%s: Start to create socket server.", __FUNCTION__);
-
-    char buf[PROPERTY_VALUE_MAX] = {
-        '\0',
-    };
-    int containerId = 0;
-    if (property_get("ro.boot.container.id", buf, "") > 0) {
-        containerId = atoi(buf);
-    }
-    mCSST = new CameraSocketServerThread(containerId, gVirtualCameraFactory);
-    mCSST->run("BackVirtualCameraSocketServerThread");
-    ALOGV("%s: Finish to create socket server.", __FUNCTION__);
-    return true;
 }
 
 void VirtualCameraFactory::cameraClientConnect(int socketFd) {
@@ -508,7 +534,9 @@ void VirtualCameraFactory::createRemoteCameras(const std::vector<RemoteCameraInf
     }
 }
 
-void VirtualCameraFactory::createFakeCamera(bool backCamera) {
+void VirtualCameraFactory::createFakeCamera(std::shared_ptr<CameraSocketServerThread> socket_server,
+                                            std::shared_ptr<CGVideoDecoder> decoder,
+                                            bool backCamera) {
     int halVersion = getCameraHalVersion(backCamera);
 
     /*
@@ -531,8 +559,9 @@ void VirtualCameraFactory::createFakeCamera(bool backCamera) {
                 mVirtualCameras[mVirtualCameraNum] = new VirtualFakeCamera(
                     mVirtualCameraNum, backCamera, &HAL_MODULE_INFO_SYM.common);
             } else {
-                mVirtualCameras[mVirtualCameraNum] = new VirtualFakeCamera3(
-                    mVirtualCameraNum, backCamera, &HAL_MODULE_INFO_SYM.common);
+                mVirtualCameras[mVirtualCameraNum] =
+                    new VirtualFakeCamera3(mVirtualCameraNum, backCamera,
+                                           &HAL_MODULE_INFO_SYM.common, socket_server, decoder);
             }
         } break;
         default:

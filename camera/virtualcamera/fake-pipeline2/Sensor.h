@@ -78,19 +78,25 @@
 #include "utils/Thread.h"
 #include "utils/Mutex.h"
 #include "utils/Timers.h"
+#include "cg_codec.h"
+#include "cg_log.h"
+#include "cg_protocol.h"
+#include <mutex>
+#include <future>
+#include <array>
 
 #include "Scene.h"
 #include "Base.h"
 
-namespace android {
+using namespace std::chrono_literals;
 
-class VirtualFakeCamera2;
+namespace android {
 
 class Sensor : private Thread, public virtual RefBase {
 public:
     // width: Width of pixel array
     // height: Height of pixel array
-    Sensor(uint32_t width, uint32_t height);
+    Sensor(uint32_t width, uint32_t height, std::shared_ptr<CGVideoDecoder> decoder = nullptr);
     ~Sensor();
 
     /*
@@ -233,22 +239,35 @@ private:
     void captureRaw(uint8_t *img, uint32_t gain, uint32_t stride);
     void captureRGBA(uint8_t *img, uint32_t gain, uint32_t width, uint32_t height);
     void captureRGB(uint8_t *img, uint32_t gain, uint32_t width, uint32_t height);
-    void captureNV21(uint8_t *img, uint32_t gain, uint32_t width, uint32_t height);
+    void captureNV12(uint8_t *img, uint32_t gain, uint32_t width, uint32_t height);
     void captureDepth(uint8_t *img, uint32_t gain, uint32_t width, uint32_t height);
     void captureDepthCloud(uint8_t *img);
     void saveNV21(uint8_t *img, uint32_t size);
     bool debug_picture_take = false;
+    void dump_decoded_frame(const std::string &filename);
+
     // m_major_version 0: CPU 1: SG1
     uint8_t m_major_version;
-    // destTempSize temp memory for preview for preview usecase
-    uint32_t destTempSize;
-    uint8_t *destTemp = NULL;
-    // dstTempSize temp memory for preview for capture/record usecase
-    uint32_t dstTempSize;
-    uint8_t *dstTemp = NULL;
+
+    // memories for preview usecases
+    uint32_t destPrevBufSize;
+    std::array<uint8_t, 640 * 480 * 3 / 2> mDstTempPrevBuf;
+    std::array<uint8_t, 640 * 480 * 3 / 2> mDstPrevBuf;
+
+    // memories for capture/record usecases
+    uint32_t mDstBufSize;
+    std::array<uint8_t, 640 * 480 * 3 / 2> mDstTempBuf;
+    std::array<uint8_t, 640 * 480 * 3 / 2> mDstBuf;
+
     // vHAL buffer
-    int srcWidth = 640;
-    int srcHeight = 480;
+    int mSrcWidth = 640;
+    int mSrcHeight = 480;
+
+    std::shared_ptr<CGVideoDecoder> mDecoder;
+
+    bool getNV12Frames(uint8_t *out_buf, int *out_size, std::chrono::milliseconds timeout_ms = 4ms);
+    void dump_yuv(uint8_t *img1, size_t img1_size, uint8_t *img2, size_t img2_size,
+                  const std::string &filename);
 };
 }  // namespace android
 

@@ -31,6 +31,10 @@
 #include <utils/SortedVector.h>
 #include <utils/List.h>
 #include <utils/Mutex.h>
+#include <memory>
+#include "cg_codec.h"
+#include "CameraSocketServerThread.h"
+#include "CameraSocketCommand.h"
 
 using ::android::hardware::camera::common::V1_0::helper::CameraMetadata;
 
@@ -47,7 +51,9 @@ namespace android {
  */
 class VirtualFakeCamera3 : public VirtualCamera3, private Sensor::SensorListener {
 public:
-    VirtualFakeCamera3(int cameraId, bool facingBack, struct hw_module_t *module);
+    VirtualFakeCamera3(int cameraId, bool facingBack, struct hw_module_t *module,
+                       std::shared_ptr<CameraSocketServerThread> socket_server,
+                       std::shared_ptr<CGVideoDecoder> decoder);
 
     virtual ~VirtualFakeCamera3();
 
@@ -157,7 +163,7 @@ private:
      * Cache for default templates. Once one is requested, the pointer must be
      * valid at least until close() is called on the device
      */
-    camera_metadata_t *mDefaultTemplates[CAMERA3_TEMPLATE_COUNT];
+    camera_metadata_t *mDefaultTemplates[CAMERA3_TEMPLATE_COUNT] = {nullptr};
 
     /**
      * Private stream information, stored in camera3_stream_t->priv.
@@ -183,6 +189,11 @@ private:
     sp<Sensor> mSensor;
     sp<JpegCompressor> mJpegCompressor;
     friend class JpegCompressor;
+
+    // socket server
+    std::shared_ptr<CameraSocketServerThread> mSocketServer;
+    // I420 Decoder
+    std::shared_ptr<CGVideoDecoder> mDecoder;
 
     /** Processing thread for sending out results */
 
@@ -287,14 +298,7 @@ private:
     // Flag becomes important in webRTC case where video stream takes time to open.
     bool mprocessCaptureRequestFlag = false;
 
-    enum {
-        CMD_OPEN_CAMERA = 11,
-        CMD_CLOSE_CAMERA = 12,
-        CMD_NONE_CAMERA = 13,
-    };
-    // Clears camera vHAL buffer
-    void clearLastBuffer(char *fbuffer, int width, int height);
-    uint32_t mCMD = CMD_NONE_CAMERA;
+    socket::CameraConfig mCameraConfig = {};
 };
 
 }  // namespace android

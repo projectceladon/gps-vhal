@@ -21,9 +21,8 @@
 
 #include <inttypes.h>
 
-#define LOG_NDEBUG 0
 //#define LOG_NNDEBUG 0
-#define LOG_TAG "VirtualCamera_FakeCamera3"
+#define LOG_TAG "VirtualFakeCamera3: "
 #include <cutils/properties.h>
 #include <log/log.h>
 
@@ -94,14 +93,15 @@ const float VirtualFakeCamera3::kExposureWanderMax = 1;
  * Camera device lifecycle methods
  */
 
-VirtualFakeCamera3::VirtualFakeCamera3(int cameraId, bool facingBack, struct hw_module_t *module)
-    : VirtualCamera3(cameraId, module), mFacingBack(facingBack) {
+VirtualFakeCamera3::VirtualFakeCamera3(int cameraId, bool facingBack, struct hw_module_t *module,
+                                       std::shared_ptr<CameraSocketServerThread> socket_server,
+                                       std::shared_ptr<CGVideoDecoder> decoder)
+    : VirtualCamera3(cameraId, module),
+      mFacingBack(facingBack),
+      mSocketServer(socket_server),
+      mDecoder(decoder) {
     ALOGI("Constructing virtual fake camera 3: ID %d, facing %s", mCameraID,
           facingBack ? "back" : "front");
-
-    for (size_t i = 0; i < CAMERA3_TEMPLATE_COUNT; i++) {
-        mDefaultTemplates[i] = NULL;
-    }
 }
 
 VirtualFakeCamera3::~VirtualFakeCamera3() {
@@ -114,7 +114,7 @@ VirtualFakeCamera3::~VirtualFakeCamera3() {
 
 status_t VirtualFakeCamera3::Initialize(const char *device_name, const char *frame_dims,
                                         const char *facing_dir) {
-    ALOGV("%s: E", __FUNCTION__);
+    ALOGVV("%s: E", __FUNCTION__);
     status_t res;
 
     if (mStatus != STATUS_ERROR) {
@@ -137,39 +137,40 @@ status_t VirtualFakeCamera3::Initialize(const char *device_name, const char *fra
     return VirtualCamera3::Initialize(nullptr, nullptr, nullptr);
 }
 
-void VirtualFakeCamera3::clearLastBuffer(char *fbuffer, int width, int height) {
-    ALOGVV(" %s Enter", __FUNCTION__);
-    char *uv_offset = fbuffer + width * height;
-    memset(fbuffer, 0x10, (width * height));
-    memset(uv_offset, 0x80, (width * height) / 2);
-    ALOGVV(" %s: Exit", __FUNCTION__);
-}
-
 status_t VirtualFakeCamera3::connectCamera(hw_device_t **device) {
     ALOGI(LOG_TAG "%s: E", __FUNCTION__);
     Mutex::Autolock l(mLock);
     status_t res;
 
-    int sendSize = 0;
-    mCMD = CMD_OPEN_CAMERA;
-    uint32_t *cmd = &mCMD;
-
-    mSocketfd = gVirtualCameraFactory.getSocketFd();
-    ALOGI(LOG_TAG "%s: CSST: mSocketfd: %d", __FUNCTION__, mSocketfd);
-    if (mSocketfd > 0) {
-        if ((sendSize = send(mSocketfd, cmd, sizeof(cmd), 0) < 0)) {
-            ALOGE(LOG_TAG "%s: Command CMD_OPEN_CAMERA send fail. sendSize: %d, err %s ",
-                  __FUNCTION__, sendSize, strerror(errno));
-            mCMD = CMD_NONE_CAMERA;
-        }
+    if (gIsInFrameH264) {
+        // initialize decoder
+        if (mDecoder->init(CAMERA_VIDEO_H264, CAMERA_RESOLUTION_VGA, "vaapi", 0) < 0) {
+            mDecoder.reset();
+            ALOGE("%s CGVideoDecoder init failed.", __func__);
+        } else
+            ALOGVV("%s CGVideoDecoder init done.", __func__);
     }
 
-    if (mStatus != STATUS_CLOSED) {
-        ALOGE("%s: Can't connect in state %d", __FUNCTION__, mStatus);
+    socket::CameraConfig camera_config = {};
+
+    camera_config.operation = socket::CameraOperation::kOpen;
+
+    int client_fd = mSocketServer->getClientFd();
+    if (client_fd < 0) {
+        ALOGE("%s: We're not connected to client yet!", __FUNCTION__);
         return INVALID_OPERATION;
     }
+    ALOGI("%s: Connected to client %d!", __FUNCTION__, client_fd);
+    if (send(client_fd, &camera_config, sizeof(camera_config), 0) < 0) {
+        ALOGE(LOG_TAG "%s: Failed to send Camera Open command to client, err %s ", __FUNCTION__,
+              strerror(errno));
+        return INVALID_OPERATION;
+    }
+    ALOGI("%s: Sent CMD_OPEN_CAMERA to client %d!", __FUNCTION__, client_fd);
+    mCameraConfig = camera_config;
 
-    mSensor = new Sensor(mSensorWidth, mSensorHeight);
+    // create sensor who gets decoded frames and forwards them to framework
+    mSensor = new Sensor(mSensorWidth, mSensorHeight, mDecoder);
     mSensor->setSensorListener(this);
 
     res = mSensor->startUp();
@@ -203,29 +204,46 @@ status_t VirtualFakeCamera3::closeCamera() {
     ALOGI(LOG_TAG " %s: E ", __FUNCTION__);
     status_t res;
 
-    int sendSize = 0;
-    mCMD = CMD_CLOSE_CAMERA;
-    uint32_t *cmd = &mCMD;
     // Workaround: first time after flash camera open close happens very fast
     // and start video stream didnt starts properly so need wait for start
     // stream. Need to be removed later once handle startPublication properly in
     // remote. If NO processCaptureRequest received between open and close then wait.
+
+    socket::CameraConfig camera_config;
+
+    camera_config.operation = socket::CameraOperation::kClose;
 
     if (!mprocessCaptureRequestFlag) {
         ALOGE(LOG_TAG " %s: wait:..", __FUNCTION__);
         std::this_thread::sleep_for(2500ms);
     }
 
-    mSocketfd = gVirtualCameraFactory.getSocketFd();
-    ALOGV(LOG_TAG " %s: CSST:mSocketfd: %d", __FUNCTION__, mSocketfd);
-
-    if (mSocketfd > 0) {
-        if ((sendSize = send(mSocketfd, cmd, sizeof(cmd), 0) < 0)) {
-            ALOGE(LOG_TAG "%s: Command CMD_CLOSE_CAMERA send fail. sendSize: %d, err  %s",
-                  __FUNCTION__, sendSize, strerror(errno));
-            mCMD = CMD_NONE_CAMERA;
-        }
+    // Send close command to client
+    auto client_fd = mSocketServer->getClientFd();
+    ALOGVV(LOG_TAG "%s: socket client fd: %d", __FUNCTION__, client_fd);
+    if (client_fd < 0) {
+        ALOGE("%s: We're not connected to client yet!", __FUNCTION__);
+        return INVALID_OPERATION;
     }
+
+    if (send(client_fd, &camera_config, sizeof(camera_config), 0) < 0) {
+        ALOGE(LOG_TAG "%s: Failed to send Camera Close command to client, err %s ", __FUNCTION__,
+              strerror(errno));
+        return INVALID_OPERATION;
+    }
+    ALOGI("%s: Sent CMD_CLOSE_CAMERA to client %d!", __FUNCTION__, client_fd);
+
+    if (gIsInFrameH264) {
+        // Stop decode requests, if any.
+        mDecoder->destroy();
+        ALOGVV("%s CGVideoDecoder destroyed.", __func__);
+    }
+
+    ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
+    handle->reset();
+
+    ALOGVV("%s VideoBuffers reset", __func__);
+    mCameraConfig = camera_config;
 
     mprocessCaptureRequestFlag = false;
 
@@ -256,12 +274,8 @@ status_t VirtualFakeCamera3::closeCamera() {
         mStreams.clear();
         mReadoutThread.clear();
     }
-    mCMD = CMD_NONE_CAMERA;
-
-    ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
-    char *fbuffer = (char *)handle->clientBuf[handle->clientRevCount % 1].buffer;
-    ALOGI(LOG_TAG " %s: clearing buffer[%d]", __FUNCTION__, handle->clientRevCount);
-    clearLastBuffer(fbuffer, 640, 480);
+    mCameraConfig = {};
+    mSocketServer->clearBuffer();
 
     return VirtualCamera3::closeCamera();
 }
@@ -440,12 +454,11 @@ status_t VirtualFakeCamera3::configureStreams(camera3_stream_configuration *stre
      * Can't reuse settings across configure call
      */
     mPrevSettings.clear();
-
     return OK;
 }
 
 status_t VirtualFakeCamera3::registerStreamBuffers(const camera3_stream_buffer_set *bufferSet) {
-    ALOGV("%s: E", __FUNCTION__);
+    ALOGVV("%s: E", __FUNCTION__);
     Mutex::Autolock l(mLock);
 
     // Should not be called in HAL versions >= 3.2
@@ -782,6 +795,8 @@ const camera_metadata_t *VirtualFakeCamera3::constructDefaultRequestSettings(int
 status_t VirtualFakeCamera3::processCaptureRequest(camera3_capture_request *request) {
     Mutex::Autolock l(mLock);
     status_t res;
+    status_t ret;
+    uint64_t useflag = 0;
     mprocessCaptureRequestFlag = true;
     /** Validation */
 

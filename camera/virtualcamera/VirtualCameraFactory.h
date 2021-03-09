@@ -24,6 +24,9 @@
 
 #include <utils/RefBase.h>
 #include <vector>
+#include <memory>
+#include "CameraSocketServerThread.h"
+#include "cg_codec.h"
 
 namespace android {
 
@@ -170,12 +173,6 @@ public:
      */
     int getVirtualCameraNum() const { return mVirtualCameraNum; }
 
-    int getSocketFd() { return mSocketFdHandle; }
-
-    void setSocketFd(int fd) { mSocketFdHandle = fd; }
-
-    bool IsClientClosed() { return mClientAvailable; }
-    void setClientAvailability(bool status) { mClientAvailable = status; }
     /*
      * Checks whether or not the constructor has succeeded.
      */
@@ -230,8 +227,8 @@ private:
      * true, it will be created as if it were a camera on the back of the phone.
      * Otherwise, it will be front-facing.
      */
-    void createFakeCamera(bool backCamera);
-
+    void createFakeCamera(std::shared_ptr<CameraSocketServerThread> socket_server,
+                          std::shared_ptr<CGVideoDecoder> decoder, bool backCamera);
     /*
      * Waits till remote-props has done setup, timeout after 500ms.
      */
@@ -246,6 +243,8 @@ private:
      * Gets camera device version number to use for back camera emulation.
      */
     int getCameraHalVersion(bool backCamera);
+
+    void readInputFrameFormat();
 
 private:
     /****************************************************************************
@@ -264,12 +263,6 @@ private:
     // Number of virtual fake cameras.
     int mFakeCameraNum;
 
-    // socketFD handle
-    int mSocketFdHandle;
-
-    // flag to know weather client closed
-    bool mClientAvailable = true;
-
     // Flags whether or not constructor has succeeded.
     bool mConstructedOK;
 
@@ -284,13 +277,18 @@ public:
     static struct hw_module_methods_t mCameraModuleMethods;
 
 public:
-    bool createSocketServer();
     void cameraClientConnect(int socketFd);
     void cameraClientDisconnect(int socketFd);
     int trySwitchRemoteCamera(int curCameraId);
 
 private:
-    sp<CameraSocketServerThread> mCSST;
+    // NV12 Decoder
+    std::shared_ptr<CGVideoDecoder> mDecoder;
+
+    // Socket server
+    std::shared_ptr<CameraSocketServerThread> mSocketServer;
+
+    bool createSocketServer(std::shared_ptr<CGVideoDecoder> decoder);
 };
 
 };  // end of namespace android

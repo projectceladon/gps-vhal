@@ -22,7 +22,7 @@
  * for all camera API calls that defined by camera3_device_ops_t API.
  */
 
-#define LOG_NDEBUG 0
+//#define LOG_NDEBUG 0
 #define LOG_TAG "VirtualCamera3_Camera"
 #include <log/log.h>
 
