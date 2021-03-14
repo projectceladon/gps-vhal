@@ -99,9 +99,9 @@ emulator_camera_src := \
 	Thumbnail.cpp \
 	WorkerThread.cpp \
 	CameraSocketServerThread.cpp \
-    cg-codec/src/cg_codec.cpp \
-    cg-codec/src/cg_protocol.cpp \
-    cg-codec/src/cg_timelog.cpp
+	cg-codec/src/cg_codec.cpp \
+	cg-codec/src/cg_protocol.cpp \
+	cg-codec/src/cg_timelog.cpp
 
 # Virtual camera - goldfish / vbox_x86 build###################################
 

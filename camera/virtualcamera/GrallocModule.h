@@ -133,6 +133,7 @@ private:
             ALOGE("%s: Failed to get gralloc module: %d", __FUNCTION__, ret);
         }
 
+        mModule = nullptr;
         m_major_version = (module->module_api_version >> 8) & 0xff;
         switch (m_major_version) {
             case 0:

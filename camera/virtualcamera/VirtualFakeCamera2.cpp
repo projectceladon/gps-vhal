@@ -81,6 +81,15 @@ const uint64_t VirtualFakeCamera2::kAvailableJpegMinDurations[1] = {
 VirtualFakeCamera2::VirtualFakeCamera2(int cameraId, bool facingBack, struct hw_module_t *module)
     : VirtualCamera2(cameraId, module), mFacingBack(facingBack), mIsConnected(false) {
     ALOGE("Constructing virtual fake camera 2 facing %s", facingBack ? "back" : "front");
+
+    mNextStreamId = 1;
+    mNextReprocessStreamId = 1;
+    mRawStreamCount = 0;
+    mProcessedStreamCount = 0;
+    mJpegStreamCount = 0;
+    mReprocessStreamCount = 0;
+    mSensorWidth = 640;
+    mSensorHeight = 480;
 }
 
 VirtualFakeCamera2::~VirtualFakeCamera2() {
@@ -616,7 +625,16 @@ void VirtualFakeCamera2::signalError() {
 
 VirtualFakeCamera2::ConfigureThread::ConfigureThread(VirtualFakeCamera2 *parent)
     : Thread(false), mParent(parent), mRequestCount(0), mNextBuffers(NULL) {
+    mRequest = NULL;
+    mActive = false;
     mRunning = false;
+    mWaitingForReadout = false;
+    mNextNeedsJpeg = false;
+    mNextIsCapture = false;
+    mNextFrameNumber = 0;
+    mNextExposureTime = 0;
+    mNextFrameDuration = 0;
+    mNextSensitivity = 0;
 }
 
 VirtualFakeCamera2::ConfigureThread::~ConfigureThread() {}
@@ -1037,6 +1055,8 @@ VirtualFakeCamera2::ReadoutThread::ReadoutThread(VirtualFakeCamera2 *parent)
     mInFlightQueue = new InFlightQueue[kInFlightQueueSize];
     mInFlightHead = 0;
     mInFlightTail = 0;
+    mIsCapture = false;
+    mJpegTimestamp = 0;
 }
 
 VirtualFakeCamera2::ReadoutThread::~ReadoutThread() { delete[] mInFlightQueue; }
@@ -1423,6 +1443,33 @@ status_t VirtualFakeCamera2::ReadoutThread::collectStatisticsMetadata(camera_met
 VirtualFakeCamera2::ControlThread::ControlThread(VirtualFakeCamera2 *parent)
     : Thread(false), mParent(parent) {
     mRunning = false;
+    mStartAf = false;
+    mCancelAf = false;
+    mStartPrecapture = false;
+
+    mControlMode = ANDROID_CONTROL_MODE_AUTO;
+
+    mEffectMode = ANDROID_CONTROL_EFFECT_MODE_OFF;
+    mSceneMode = ANDROID_CONTROL_SCENE_MODE_FACE_PRIORITY;
+
+    mAfMode = ANDROID_CONTROL_AF_MODE_AUTO;
+    mAfModeChange = false;
+
+    mAeMode = ANDROID_CONTROL_AE_MODE_ON;
+    mAwbMode = ANDROID_CONTROL_AWB_MODE_AUTO;
+
+    mAfTriggerId = 0;
+    mPrecaptureTriggerId = 0;
+
+    mAfState = ANDROID_CONTROL_AF_STATE_INACTIVE;
+    mAeState = ANDROID_CONTROL_AE_STATE_INACTIVE;
+    mAwbState = ANDROID_CONTROL_AWB_STATE_INACTIVE;
+    mAeLock = false;
+
+    mExposureTime = kNormalExposureTime;
+    mAfScanDuration = 0;
+    mAeScanDuration = 0;
+    mLockAfterPassiveScan = false;
 }
 
 VirtualFakeCamera2::ControlThread::~ControlThread() {}

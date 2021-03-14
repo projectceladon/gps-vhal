@@ -621,8 +621,8 @@ char *VirtualCamera::getParameters() {
 
     String8 params(mParameters.flatten());
     char *ret_str = reinterpret_cast<char *>(malloc(sizeof(char) * (params.length() + 1)));
-    memset(ret_str, 0, params.length() + 1);
     if (ret_str != NULL) {
+        memset(ret_str, 0, params.length() + 1);
         strncpy(ret_str, params.string(), params.length() + 1);
         return ret_str;
     } else {

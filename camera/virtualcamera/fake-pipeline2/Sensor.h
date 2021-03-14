@@ -90,6 +90,9 @@
 
 using namespace std::chrono_literals;
 
+#define FRAME_SIZE_240P 320 * 240 * 1.5
+#define FRAME_SIZE_480P 640 * 480 * 1.5
+
 namespace android {
 
 class Sensor : private Thread, public virtual RefBase {
@@ -201,12 +204,12 @@ private:
     Mutex mControlMutex;  // Lock before accessing control parameters
     // Start of control parameters
     Condition mVSync;
-    bool mGotVSync;
+    bool mGotVSync = false;
     uint64_t mExposureTime;
     uint64_t mFrameDuration;
-    uint32_t mGainFactor;
-    Buffers *mNextBuffers;
-    uint32_t mFrameNumber;
+    uint32_t mGainFactor = kDefaultSensitivity;
+    Buffers *mNextBuffers = nullptr;
+    uint32_t mFrameNumber = 0;
 
     // End of control parameters
 
@@ -214,13 +217,13 @@ private:
     // Start of readout variables
     Condition mReadoutAvailable;
     Condition mReadoutComplete;
-    Buffers *mCapturedBuffers;
-    nsecs_t mCaptureTime;
-    SensorListener *mListener;
+    Buffers *mCapturedBuffers = nullptr;
+    nsecs_t mCaptureTime = 0;
+    SensorListener *mListener = nullptr;
     // End of readout variables
 
     // Time of sensor startup, used for simulation zero-time point
-    nsecs_t mStartupTime;
+    // nsecs_t mStartupTime;
 
     /**
      * Inherited Thread virtual overrides, and members only used by the
@@ -231,8 +234,8 @@ private:
 
     virtual bool threadLoop();
 
-    nsecs_t mNextCaptureTime;
-    Buffers *mNextCapturedBuffers;
+    nsecs_t mNextCaptureTime = 0;
+    Buffers *mNextCapturedBuffers = nullptr;
 
     Scene mScene;
 
@@ -247,23 +250,23 @@ private:
     void dump_decoded_frame(const std::string &filename);
 
     // m_major_version 0: CPU 1: SG1
-    uint8_t m_major_version;
+    uint8_t m_major_version = 1;
 
     // memories for preview usecases
-    uint32_t destPrevBufSize;
-    std::array<uint8_t, 640 * 480 * 3 / 2> mDstTempPrevBuf;
-    std::array<uint8_t, 640 * 480 * 3 / 2> mDstPrevBuf;
+    uint32_t destPrevBufSize = FRAME_SIZE_480P;
+    std::array<uint8_t, 640 * 480 * 3 / 2> mDstTempPrevBuf = {};
+    std::array<uint8_t, 640 * 480 * 3 / 2> mDstPrevBuf = {};
 
     // memories for capture/record usecases
-    uint32_t mDstBufSize;
-    std::array<uint8_t, 640 * 480 * 3 / 2> mDstTempBuf;
-    std::array<uint8_t, 640 * 480 * 3 / 2> mDstBuf;
+    uint32_t mDstBufSize = FRAME_SIZE_480P;
+    std::array<uint8_t, 640 * 480 * 3 / 2> mDstTempBuf = {};
+    std::array<uint8_t, 640 * 480 * 3 / 2> mDstBuf = {};
 
     // vHAL buffer
     int mSrcWidth = 640;
     int mSrcHeight = 480;
 
-    std::shared_ptr<CGVideoDecoder> mDecoder;
+    std::shared_ptr<CGVideoDecoder> mDecoder = {};
 
     bool getNV12Frames(uint8_t *out_buf, int *out_size, std::chrono::milliseconds timeout_ms = 4ms);
     void dump_yuv(uint8_t *img1, size_t img1_size, uint8_t *img2, size_t img2_size,

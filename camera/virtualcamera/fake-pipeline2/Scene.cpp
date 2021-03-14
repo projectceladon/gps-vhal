@@ -102,7 +102,6 @@ const uint8_t Scene::kScene[Scene::kSceneWidth * Scene::kSceneHeight] = {
 Scene::Scene(int sensorWidthPx, int sensorHeightPx, float sensorSensitivity)
     : mSensorWidth(sensorWidthPx),
       mSensorHeight(sensorHeightPx),
-      mHour(12),
       mExposureDuration(0.033f)
 // mSensorSensitivity(sensorSensitivity)
 {

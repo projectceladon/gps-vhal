@@ -34,7 +34,7 @@ namespace android {
 
 VirtualBaseCamera::VirtualBaseCamera(int cameraId, uint32_t cameraVersion,
                                      struct hw_device_t *device, struct hw_module_t *module)
-    : mCameraInfo(NULL), mCameraID(cameraId), mCameraDeviceVersion(cameraVersion) {
+    : mCameraID(cameraId), mCameraDeviceVersion(cameraVersion) {
     /*
      * Initialize camera_device descriptor for this object.
      */

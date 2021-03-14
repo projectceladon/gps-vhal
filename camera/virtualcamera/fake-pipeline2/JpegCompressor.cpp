@@ -29,8 +29,7 @@
 
 namespace android {
 
-JpegCompressor::JpegCompressor()
-    : Thread(false), mIsBusy(false), mSynchronous(false), mBuffers(NULL), mListener(NULL) {}
+JpegCompressor::JpegCompressor() : Thread(false) {}
 
 JpegCompressor::~JpegCompressor() { Mutex::Autolock lock(mMutex); }
 

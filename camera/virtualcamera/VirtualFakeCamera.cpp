@@ -26,19 +26,12 @@
 #include "VirtualFakeCamera.h"
 #include "VirtualCameraFactory.h"
 #include "VirtualFakeCameraDevice.h"
-#include "VirtualFakeRotatingCameraDevice.h"
 
 namespace android {
 
 VirtualFakeCamera::VirtualFakeCamera(int cameraId, bool facingBack, struct hw_module_t *module)
-    : VirtualCamera(cameraId, module), mFacingBack(facingBack), mFakeCameraDevice(nullptr) {
-    const char *key = "ro.kernel.remote.camera.fake.rotating";
-    char prop[PROPERTY_VALUE_MAX];
-    if (property_get(key, prop, nullptr) > 0) {
-        mFakeCameraDevice = new VirtualFakeRotatingCameraDevice(this);
-    } else {
-        mFakeCameraDevice = new VirtualFakeCameraDevice(this);
-    }
+        : VirtualCamera(cameraId, module), mFacingBack(facingBack), mFakeCameraDevice(nullptr) {
+    mFakeCameraDevice = new VirtualFakeCameraDevice(this);
 }
 
 VirtualFakeCamera::~VirtualFakeCamera() { delete mFakeCameraDevice; }

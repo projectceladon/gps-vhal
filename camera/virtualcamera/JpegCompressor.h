@@ -81,7 +81,7 @@ public:
 private:
     // library handle to dlopen
     static void *mDl;
-    JpegStub mStub;
+    JpegStub mStub = {};
 };
 
 }; /* namespace android */

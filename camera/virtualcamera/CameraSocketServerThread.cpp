@@ -50,11 +50,9 @@ CameraSocketServerThread::CameraSocketServerThread(std::string suffix,
                                                    std::shared_ptr<CGVideoDecoder> decoder)
     : Thread(/*canCallJava*/ false), mRunning{true}, mSocketServerFd{-1}, mDecoder{decoder} {
     std::string sock_path = "/ipc/camera-socket" + suffix;
-    const char *sock_path_cstr =
-        (getenv("K8S_ENV") != NULL && strcmp(getenv("K8S_ENV"), "true") == 0)
-            ? "/conn/camera-socket"
-            : sock_path.c_str();
-    mSocketPath = sock_path_cstr;
+    char *k8s_env_value = getenv("K8S_ENV");
+    mSocketPath = (k8s_env_value != NULL && !strcmp(k8s_env_value, "true"))
+            ? "/conn/camera-socket" : sock_path.c_str();
     ALOGI("%s camera socket server path is %s", __FUNCTION__, mSocketPath.c_str());
 }
 
@@ -231,6 +229,7 @@ bool CameraSocketServerThread::threadLoop() {
                             ALOGE(
                                 "%s Fatal: Unusual H264 packet size detected: %zu! Max is %zu, ...",
                                 __func__, recv_frame_size, mSocketBuffer.size());
+                            continue;
                         }
                         // recv frame
                         if ((size = recv(mClientFd, (char *)mSocketBuffer.data(), recv_frame_size,

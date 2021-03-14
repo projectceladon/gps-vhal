@@ -102,6 +102,22 @@ VirtualFakeCamera3::VirtualFakeCamera3(int cameraId, bool facingBack, struct hw_
       mDecoder(decoder) {
     ALOGI("Constructing virtual fake camera 3: ID %d, facing %s", mCameraID,
           facingBack ? "back" : "front");
+
+    mControlMode = ANDROID_CONTROL_MODE_AUTO;
+    mFacePriority = false;
+    mAeMode = ANDROID_CONTROL_AE_MODE_ON;
+    mAfMode = ANDROID_CONTROL_AF_MODE_AUTO;
+    mAwbMode = ANDROID_CONTROL_AWB_MODE_AUTO;
+    mAeState = ANDROID_CONTROL_AE_STATE_INACTIVE;
+    mAfState = ANDROID_CONTROL_AF_STATE_INACTIVE;
+    mAwbState = ANDROID_CONTROL_AWB_STATE_INACTIVE;
+    mAeCounter = 0;
+    mAeTargetExposureTime = kNormalExposureTime;
+    mAeCurrentExposureTime = kNormalExposureTime;
+    mAeCurrentSensitivity = kNormalSensitivity;
+    mSensorWidth = 640;
+    mSensorHeight = 480;
+    mInputStream = NULL;
 }
 
 VirtualFakeCamera3::~VirtualFakeCamera3() {
@@ -312,6 +328,7 @@ status_t VirtualFakeCamera3::configureStreams(camera3_stream_configuration *stre
         return BAD_VALUE;
     }
 
+    ALOGI("%s: %d streams", __FUNCTION__, streamList->num_streams);
     if (streamList->num_streams < 1) {
         ALOGE("%s: Bad number of streams requested: %d", __FUNCTION__, streamList->num_streams);
         return BAD_VALUE;
@@ -903,6 +920,8 @@ status_t VirtualFakeCamera3::processCaptureRequest(camera3_capture_request *requ
      * Get ready for sensor config
      */
 
+    int syncTimeoutCount = 0;
+    ReadoutThread::Request r;
     nsecs_t exposureTime;
     nsecs_t frameDuration;
     uint32_t sensitivity;
@@ -929,6 +948,8 @@ status_t VirtualFakeCamera3::processCaptureRequest(camera3_capture_request *requ
         destBuf.streamId = kGenericStreamId;
         destBuf.width = srcBuf.stream->width;
         destBuf.height = srcBuf.stream->height;
+        destBuf.format = (srcBuf.stream->format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED)
+                ? HAL_PIXEL_FORMAT_RGBA_8888 : srcBuf.stream->format;
         // Fix ME (dest buffer fixed for 640x480)
         // destBuf.width = 640;
         // destBuf.height = 480;
@@ -948,8 +969,6 @@ status_t VirtualFakeCamera3::processCaptureRequest(camera3_capture_request *requ
 #ifndef USE_GRALLOC1
             }
 #endif
-        } else {
-            destBuf.format = srcBuf.stream->format;
         }
         destBuf.stride = srcBuf.stream->width;
         destBuf.dataSpace = srcBuf.stream->data_space;
@@ -1028,12 +1047,14 @@ status_t VirtualFakeCamera3::processCaptureRequest(camera3_capture_request *requ
         bool ready = mJpegCompressor->waitForDone(kJpegTimeoutNs);
         if (!ready) {
             ALOGE("%s: Timeout waiting for JPEG compression to complete!", __FUNCTION__);
-            return NO_INIT;
+            res = NO_INIT;
+            goto out;
         }
         res = mJpegCompressor->reserve();
         if (res != OK) {
             ALOGE("%s: Error managing JPEG compressor resources, can't reserve it!", __FUNCTION__);
-            return NO_INIT;
+            res = NO_INIT;
+            goto out;
         }
     }
 
@@ -1043,7 +1064,8 @@ status_t VirtualFakeCamera3::processCaptureRequest(camera3_capture_request *requ
     res = mReadoutThread->waitForReadout();
     if (res != OK) {
         ALOGE("%s: Timeout waiting for previous requests to complete!", __FUNCTION__);
-        return NO_INIT;
+        res = NO_INIT;
+        goto out;
     }
 
     /**
@@ -1051,15 +1073,16 @@ status_t VirtualFakeCamera3::processCaptureRequest(camera3_capture_request *requ
      * mLock held, but the interface spec is that no other calls may by done to
      * the HAL by the framework while process_capture_request is happening.
      */
-    int syncTimeoutCount = 0;
     while (!mSensor->waitForVSync(kSyncWaitTimeout)) {
         if (mStatus == STATUS_ERROR) {
-            return NO_INIT;
+            res = NO_INIT;
+            goto out;
         }
         if (syncTimeoutCount == kMaxSyncTimeoutCount) {
             ALOGE("%s: Request %d: Sensor sync timed out after %" PRId64 " ms", __FUNCTION__,
                   frameNumber, kSyncWaitTimeout * kMaxSyncTimeoutCount / 1000000);
-            return NO_INIT;
+            res = NO_INIT;
+            goto out;
         }
         syncTimeoutCount++;
     }
@@ -1073,7 +1096,6 @@ status_t VirtualFakeCamera3::processCaptureRequest(camera3_capture_request *requ
     mSensor->setDestinationBuffers(sensorBuffers);
     mSensor->setFrameNumber(request->frame_number);
 
-    ReadoutThread::Request r;
     r.frameNumber = request->frame_number;
     r.settings = settings;
     r.sensorBuffers = sensorBuffers;
@@ -1086,6 +1108,10 @@ status_t VirtualFakeCamera3::processCaptureRequest(camera3_capture_request *requ
     mPrevSettings.acquire(settings);
 
     return OK;
+out:
+    delete sensorBuffers;
+    delete buffers;
+    return res;
 }
 
 status_t VirtualFakeCamera3::flush() {
@@ -2518,7 +2544,15 @@ void VirtualFakeCamera3::onSensorEvent(uint32_t frameNumber, Event e, nsecs_t ti
 }
 
 VirtualFakeCamera3::ReadoutThread::ReadoutThread(VirtualFakeCamera3 *parent)
-    : mParent(parent), mJpegWaiting(false) {}
+    : mParent(parent), mJpegWaiting(false) {
+    mThreadActive = false;
+    mJpegFrameNumber = 0;
+    mJpegHalBuffer.acquire_fence = -1;
+    mJpegHalBuffer.release_fence = -1;
+    mJpegHalBuffer.buffer = NULL;
+    mJpegHalBuffer.status = CAMERA3_BUFFER_STATUS_ERROR;
+    mJpegHalBuffer.stream = NULL;
+}
 
 VirtualFakeCamera3::ReadoutThread::~ReadoutThread() {
     for (List<Request>::iterator i = mInFlightQueue.begin(); i != mInFlightQueue.end(); i++) {
@@ -2559,7 +2593,7 @@ status_t VirtualFakeCamera3::ReadoutThread::waitForReadout() {
 }
 
 bool VirtualFakeCamera3::ReadoutThread::threadLoop() {
-    status_t res;
+    status_t res = NO_ERROR;
 
     ALOGVV("%s: ReadoutThread waiting for request", __FUNCTION__);
 

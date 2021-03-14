@@ -102,11 +102,11 @@ public:
 protected:
     /* Fixed camera information for camera2 devices. Must be valid to access if
      * mCameraDeviceVersion is >= HARDWARE_DEVICE_API_VERSION(2,0)  */
-    camera_metadata_t *mCameraInfo;
+    camera_metadata_t *mCameraInfo = nullptr;
 
     /* Zero-based ID assigned to this camera. */
     int mCameraID;
-    int mCameraSocketFD;
+    int mCameraSocketFD = -1;
 
 private:
     /* Version of the camera device HAL implemented by this camera */

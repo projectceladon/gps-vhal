@@ -78,18 +78,19 @@ public:
 
 private:
     Mutex mBusyMutex;
-    bool mIsBusy;
+    bool mIsBusy = false;
     Condition mDone;
-    bool mSynchronous;
+    bool mSynchronous = false;
 
     Mutex mMutex;
 
-    Buffers *mBuffers;
-    JpegListener *mListener;
+    Buffers *mBuffers = nullptr;
+    JpegListener *mListener = nullptr;
 
-    StreamBuffer mJpegBuffer, mAuxBuffer;
-    bool mFoundJpeg, mFoundAux;
-    CameraMetadata mSettings;
+    StreamBuffer mJpegBuffer = {};
+    StreamBuffer mAuxBuffer = {};
+    bool mFoundJpeg = false, mFoundAux = false;
+    CameraMetadata mSettings = {};
 
     status_t compress();
 

@@ -431,7 +431,7 @@ void VirtualCameraFactory::findRemoteCameras(std::vector<RemoteCameraInfo> *remo
     while (lineEnd != std::string::npos) {
         std::string cameraStr = cameraListStr.substr(lineBegin, lineEnd - lineBegin);
         // Parse the 'name', 'framedims', and 'dir' tokens.
-        char *name, *frameDims, *dir;
+        char *name = NULL, *frameDims = NULL, *dir = NULL;
         if (getTokenValue(kListNameToken, cameraStr, &name) &&
             getTokenValue(kListDimsToken, cameraStr, &frameDims) &&
             getTokenValue(kListDirToken, cameraStr, &dir)) {
@@ -443,6 +443,9 @@ void VirtualCameraFactory::findRemoteCameras(std::vector<RemoteCameraInfo> *remo
             });
         } else {
             ALOGW("%s: Bad camera information: %s", __FUNCTION__, cameraStr.c_str());
+            delete name;
+            delete frameDims;
+            delete dir;
         }
         // Skip over the newline for the beginning of the next line.
         lineBegin = lineEnd + 1;
@@ -553,16 +556,9 @@ void VirtualCameraFactory::createFakeCamera(std::shared_ptr<CameraSocketServerTh
                 new VirtualFakeCamera2(mVirtualCameraNum, backCamera, &HAL_MODULE_INFO_SYM.common);
             break;
         case 3: {
-            const char *key = "ro.kernel.remote.camera.fake.rotating";
-            char prop[PROPERTY_VALUE_MAX];
-            if (property_get(key, prop, nullptr) > 0) {
-                mVirtualCameras[mVirtualCameraNum] = new VirtualFakeCamera(
-                    mVirtualCameraNum, backCamera, &HAL_MODULE_INFO_SYM.common);
-            } else {
-                mVirtualCameras[mVirtualCameraNum] =
-                    new VirtualFakeCamera3(mVirtualCameraNum, backCamera,
+            mVirtualCameras[mVirtualCameraNum] =
+                new VirtualFakeCamera3(mVirtualCameraNum, backCamera,
                                            &HAL_MODULE_INFO_SYM.common, socket_server, decoder);
-            }
         } break;
         default:
             ALOGE("%s: Unknown %s camera hal version requested: %d", __FUNCTION__,

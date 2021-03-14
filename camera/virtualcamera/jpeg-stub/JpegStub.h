@@ -25,7 +25,7 @@ typedef _ExifData ExifData;
 extern "C" {
 
 struct JpegStub {
-    void *mCompressor;
+    void *mCompressor = nullptr;
 };
 
 void JpegStub_init(JpegStub *stub);

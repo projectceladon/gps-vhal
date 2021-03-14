@@ -58,9 +58,6 @@ using namespace std::string_literals;
         }                                                                      \
     })
 
-#define FRAME_SIZE_240P 320 * 240 * 1.5
-#define FRAME_SIZE_480P 640 * 480 * 1.5
-
 namespace android {
 std::mutex client_buf_mutex;
 
@@ -121,14 +118,8 @@ Sensor::Sensor(uint32_t width, uint32_t height, std::shared_ptr<CGVideoDecoder> 
       mResolution{width, height},
       mActiveArray{0, 0, width, height},
       mRowReadoutTime(kFrameDurationRange[0] / height),
-      mGotVSync(false),
       mExposureTime(kFrameDurationRange[0] - kMinVerticalBlank),
       mFrameDuration(kFrameDurationRange[0]),
-      mGainFactor(kDefaultSensitivity),
-      mNextBuffers(NULL),
-      mFrameNumber(0),
-      mCapturedBuffers(NULL),
-      mListener(NULL),
       mScene(width, height, kElectronsPerLuxSecond),
       mDecoder{decoder} {}
 
@@ -138,7 +129,7 @@ status_t Sensor::startUp() {
     ALOGI(LOG_TAG "%s: E", __FUNCTION__);
 
     int res;
-    mCapturedBuffers = NULL;
+    mCapturedBuffers = nullptr;
 
     const hw_module_t *module = nullptr;
     int ret = hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module);
@@ -212,12 +203,12 @@ bool Sensor::waitForVSync(nsecs_t reltime) {
 
 bool Sensor::waitForNewFrame(nsecs_t reltime, nsecs_t *captureTime) {
     Mutex::Autolock lock(mReadoutMutex);
-    if (mCapturedBuffers == NULL) {
+    if (mCapturedBuffers == nullptr) {
         int res;
         res = mReadoutAvailable.waitRelative(mReadoutMutex, reltime);
         if (res == TIMED_OUT) {
             return false;
-        } else if (res != OK || mCapturedBuffers == NULL) {
+        } else if (res != OK || mCapturedBuffers == nullptr) {
             ALOGE("Error waiting for sensor readout signal: %d", res);
             return false;
         }
@@ -225,7 +216,7 @@ bool Sensor::waitForNewFrame(nsecs_t reltime, nsecs_t *captureTime) {
     mReadoutComplete.signal();
 
     *captureTime = mCaptureTime;
-    mCapturedBuffers = NULL;
+    mCapturedBuffers = nullptr;
     return true;
 }
 
@@ -238,9 +229,9 @@ void Sensor::setSensorListener(SensorListener *listener) {
 
 status_t Sensor::readyToRun() {
     ALOGV("Starting up sensor thread");
-    mStartupTime = systemTime();
+    // mStartupTime = systemTime();
     mNextCaptureTime = 0;
-    mNextCapturedBuffers = NULL;
+    mNextCapturedBuffers = nullptr;
     return OK;
 }
 
@@ -261,7 +252,7 @@ bool Sensor::threadLoop() {
     Buffers *nextBuffers;
     uint32_t frameNumber;
     ALOGVV("Sensor Thread stage E :1");
-    SensorListener *listener = NULL;
+    SensorListener *listener = nullptr;
     {
         Mutex::Autolock lock(mControlMutex);
         exposureDuration = mExposureTime;
@@ -271,7 +262,7 @@ bool Sensor::threadLoop() {
         frameNumber = mFrameNumber;
         listener = mListener;
         // Don't reuse a buffer set
-        mNextBuffers = NULL;
+        mNextBuffers = nullptr;
 
         // Signal VSync for start of readout
         ALOGVV("Sensor VSync");
@@ -285,7 +276,7 @@ bool Sensor::threadLoop() {
      */
     ALOGVV("Sensor Thread stage E :2");
 
-    Buffers *capturedBuffers = NULL;
+    Buffers *capturedBuffers = nullptr;
     nsecs_t captureTime = 0;
 
     nsecs_t startRealTime = systemTime();
@@ -294,7 +285,7 @@ bool Sensor::threadLoop() {
     nsecs_t simulatedTime = startRealTime;
     nsecs_t frameEndRealTime = startRealTime + frameDuration;
 
-    if (mNextCapturedBuffers != NULL) {
+    if (mNextCapturedBuffers != nullptr) {
         ALOGVV("Sensor starting readout");
         // Pretend we're doing readout now; will signal once enough time
         // has elapsed
@@ -305,10 +296,10 @@ bool Sensor::threadLoop() {
 
     // TODO: Move this signal to another thread to simulate readout
     // time properly
-    if (capturedBuffers != NULL) {
+    if (capturedBuffers != nullptr) {
         ALOGVV("Sensor readout complete");
         Mutex::Autolock lock(mReadoutMutex);
-        if (mCapturedBuffers != NULL) {
+        if (mCapturedBuffers != nullptr) {
             ALOGV("Waiting for readout thread to catch up!");
             mReadoutComplete.wait(mReadoutMutex);
         }
@@ -316,7 +307,7 @@ bool Sensor::threadLoop() {
         mCapturedBuffers = capturedBuffers;
         mCaptureTime = captureTime;
         mReadoutAvailable.signal();
-        capturedBuffers = NULL;
+        capturedBuffers = nullptr;
     }
     ALOGVV("Sensor Thread stage X :2");
 
@@ -327,8 +318,8 @@ bool Sensor::threadLoop() {
     mNextCaptureTime = simulatedTime;
     mNextCapturedBuffers = nextBuffers;
 
-    if (mNextCapturedBuffers != NULL) {
-        if (listener != NULL) {
+    if (mNextCapturedBuffers != nullptr) {
+        if (listener != nullptr) {
             listener->onSensorEvent(frameNumber, SensorListener::EXPOSURE_START, mNextCaptureTime);
         }
         ALOGVV("Starting next capture: Exposure: %f ms, gain: %d", (float)exposureDuration / 1e6,
@@ -368,7 +359,7 @@ bool Sensor::threadLoop() {
                         bAux.format =
                             HAL_PIXEL_FORMAT_RGBA_8888;  // HAL_PIXEL_FORMAT_YCbCr_420_888;
                         bAux.stride = b.width;
-                        bAux.buffer = NULL;
+                        bAux.buffer = nullptr;
                         // TODO: Reuse these
                         bAux.img = new uint8_t[b.width * b.height * 3];
                         mNextCapturedBuffers->push_back(bAux);
@@ -462,7 +453,6 @@ void Sensor::dump_yuv(uint8_t *img1, size_t img1_size, uint8_t *img2, size_t img
     static size_t count = 0;
     ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
     uint8_t *bufData = handle->clientBuf[handle->clientRevCount % 1].buffer;
-    size_t size = handle->size;
 
     if (++count == 120) return;
     if (filename.empty()) {
@@ -735,7 +725,7 @@ void Sensor::saveNV21(uint8_t *img, uint32_t size) {
 
     FILE *f;
     f = fopen("/data/local/tmp/savenv21.nv21", "wb");
-    if (NULL == f) {
+    if (nullptr == f) {
         ALOGVV("%s:%d Fail to open /data/local/tmp/savenv21.nv21.", __func__, __LINE__);
         return;
     }

@@ -46,7 +46,6 @@ public:
     size_t receivedFrameNo = 0;
     size_t decodedFrameNo = 0;
 
-    size_t size;
     static ClientVideoBuffer* getClientInstance() {
         if (ic_instance == NULL) {
             ic_instance = new ClientVideoBuffer();

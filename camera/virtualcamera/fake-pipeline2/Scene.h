@@ -79,21 +79,21 @@ private:
     int mOffsetX, mOffsetY;
     int mMapDiv;
 
-    int mHandshakeX, mHandshakeY;
+    int mHandshakeX = 0, mHandshakeY = 0;
 
     int mSensorWidth;
     int mSensorHeight;
-    int mCurrentX;
-    int mCurrentY;
-    int mSubX;
-    int mSubY;
-    int mSceneX;
-    int mSceneY;
-    int mSceneIdx;
-    uint32_t *mCurrentSceneMaterial;
+    int mCurrentX = 0;
+    int mCurrentY = 0;
+    int mSubX = 0;
+    int mSubY = 0;
+    int mSceneX = 0;
+    int mSceneY = 0;
+    int mSceneIdx = 0;
+    uint32_t *mCurrentSceneMaterial = nullptr;
 
-    int mHour;
-    float mExposureDuration;
+    int mHour = 12;
+    float mExposureDuration = 0.033f;
     // float mSensorSensitivity;
 
     enum Materials {
