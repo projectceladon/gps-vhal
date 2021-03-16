@@ -31,7 +31,6 @@
 
 namespace android {
 
-class VirtualCameraHotplugThread;
 class CameraSocketServerThread;
 
 /*
@@ -155,8 +154,8 @@ public:
      * Gets fake camera orientation.
      */
     int getFakeCameraOrientation() {
-        const char *key = "remote.camera.fake.orientation";
-        int degree = property_get_int32(key, 90);
+        const char *key    = "remote.camera.fake.orientation";
+        int         degree = property_get_int32(key, 90);
         return degree;
     }
 
@@ -164,8 +163,8 @@ public:
      * Gets remote camera orientation.
      */
     int getRemoteCameraOrientation() {
-        const char *key = "remote.camera.webcam.orientation";
-        int degree = property_get_int32(key, 90);
+        const char *key    = "remote.camera.webcam.orientation";
+        int         degree = property_get_int32(key, 90);
         return degree;
     }
 
@@ -271,9 +270,6 @@ private:
     // Camera callbacks (for status changing).
     const camera_module_callbacks_t *mCallbacks;
 
-    // Hotplug thread (to call onStatusChanged).
-    sp<VirtualCameraHotplugThread> mHotplugThread;
-
 public:
     // Contains device open entry point, as required by HAL API.
     static struct hw_module_methods_t mCameraModuleMethods;
@@ -281,7 +277,7 @@ public:
 public:
     void cameraClientConnect(int socketFd);
     void cameraClientDisconnect(int socketFd);
-    int trySwitchRemoteCamera(int curCameraId);
+    int  trySwitchRemoteCamera(int curCameraId);
 
 private:
     // NV12 Decoder

@@ -23,7 +23,6 @@
 #define LOG_TAG "VirtualCamera_Factory"
 
 #include "VirtualCameraFactory.h"
-#include "VirtualCameraHotplugThread.h"
 #include "VirtualFakeCamera.h"
 #include "VirtualFakeCamera2.h"
 #include "VirtualFakeCamera3.h"
@@ -131,16 +130,6 @@ VirtualCameraFactory::VirtualCameraFactory()
     ALOGI("%d cameras are being virtual. %d of them are fake cameras.", mVirtualCameraNum,
           mFakeCameraNum);
 
-    // Create hotplug thread.
-    {
-        Vector<int> cameraIdVector;
-        for (int i = 0; i < mVirtualCameraNum; ++i) {
-            cameraIdVector.push_back(i);
-        }
-        mHotplugThread = new VirtualCameraHotplugThread(&cameraIdVector[0], mVirtualCameraNum);
-        mHotplugThread->run("VirtualCameraHotplugThread");
-    }
-
     mConstructedOK = true;
 }
 
@@ -149,8 +138,8 @@ bool VirtualCameraFactory::createSocketServer(std::shared_ptr<CGVideoDecoder> de
 
     char id[PROPERTY_VALUE_MAX] = {0};
     if (property_get("ro.boot.container.id", id, "") > 0) {
-        mSocketServer = std::make_shared<CameraSocketServerThread>(id, decoder,
-                                std::ref(mCameraSessionState));
+        mSocketServer =
+            std::make_shared<CameraSocketServerThread>(id, decoder, std::ref(mCameraSessionState));
 
         mSocketServer->run("BackVirtualCameraSocketServerThread");
     } else
@@ -169,11 +158,6 @@ VirtualCameraFactory::~VirtualCameraFactory() {
             }
         }
         delete[] mVirtualCameras;
-    }
-
-    if (mHotplugThread != nullptr) {
-        mHotplugThread->requestExit();
-        mHotplugThread->join();
     }
 
     if (mRemoteClient.mCameraSocketFD > 0) {
@@ -412,8 +396,8 @@ bool VirtualCameraFactory::getTokenValue(const char *token, const std::string &s
 void VirtualCameraFactory::findRemoteCameras(std::vector<RemoteCameraInfo> *remoteCameras) {
     ALOGV("%s", __func__);
     // Obtain camera list.
-    char *cameraList = nullptr;
-    status_t res = mRemoteClient.listCameras(&cameraList);
+    char *   cameraList = nullptr;
+    status_t res        = mRemoteClient.listCameras(&cameraList);
 
     /*
      * Empty list, or list containing just an EOL means that there were no
@@ -435,7 +419,7 @@ void VirtualCameraFactory::findRemoteCameras(std::vector<RemoteCameraInfo> *remo
     free(cameraList);
 
     size_t lineBegin = 0;
-    size_t lineEnd = cameraListStr.find('\n');
+    size_t lineEnd   = cameraListStr.find('\n');
     while (lineEnd != std::string::npos) {
         std::string cameraStr = cameraListStr.substr(lineBegin, lineEnd - lineBegin);
         // Parse the 'name', 'framedims', and 'dir' tokens.
@@ -445,9 +429,9 @@ void VirtualCameraFactory::findRemoteCameras(std::vector<RemoteCameraInfo> *remo
             getTokenValue(kListDirToken, cameraStr, &dir)) {
             // Push the camera info if it was all successfully parsed.
             remoteCameras->push_back(RemoteCameraInfo{
-                .name = name,
+                .name      = name,
                 .frameDims = frameDims,
-                .dir = dir,
+                .dir       = dir,
             });
         } else {
             ALOGW("%s: Bad camera information: %s", __FUNCTION__, cameraStr.c_str());
@@ -457,7 +441,7 @@ void VirtualCameraFactory::findRemoteCameras(std::vector<RemoteCameraInfo> *remo
         }
         // Skip over the newline for the beginning of the next line.
         lineBegin = lineEnd + 1;
-        lineEnd = cameraListStr.find('\n', lineBegin);
+        lineEnd   = cameraListStr.find('\n', lineBegin);
     }
 }
 
@@ -487,7 +471,7 @@ void VirtualCameraFactory::createRemoteCameras(const std::vector<RemoteCameraInf
 
         // Create and initialize REMOTE camera.
         VirtualBaseCamera *remoteCam = nullptr;
-        status_t res;
+        status_t           res;
         switch (halVersion) {
             case 1:
                 VirtualRemoteCamera *remoteCamOne;
@@ -546,8 +530,8 @@ void VirtualCameraFactory::createRemoteCameras(const std::vector<RemoteCameraInf
 }
 
 void VirtualCameraFactory::createFakeCamera(std::shared_ptr<CameraSocketServerThread> socket_server,
-                                            std::shared_ptr<CGVideoDecoder> decoder,
-                                            bool backCamera) {
+                                            std::shared_ptr<CGVideoDecoder>           decoder,
+                                            bool                                      backCamera) {
     int halVersion = getCameraHalVersion(backCamera);
 
     /*
@@ -565,9 +549,8 @@ void VirtualCameraFactory::createFakeCamera(std::shared_ptr<CameraSocketServerTh
             break;
         case 3: {
             mVirtualCameras[mVirtualCameraNum] =
-                new VirtualFakeCamera3(mVirtualCameraNum, backCamera,
-                                           &HAL_MODULE_INFO_SYM.common, socket_server, decoder,
-                                           std::ref(mCameraSessionState));
+                new VirtualFakeCamera3(mVirtualCameraNum, backCamera, &HAL_MODULE_INFO_SYM.common,
+                                       socket_server, decoder, std::ref(mCameraSessionState));
         } break;
         default:
             ALOGE("%s: Unknown %s camera hal version requested: %d", __FUNCTION__,
@@ -600,7 +583,7 @@ void VirtualCameraFactory::waitForRemoteSfFakeCameraPropertyAvailable() {
      * android/camera/camera-service.c
      * bug: 30768229
      */
-    int numAttempts = 100;
+    int  numAttempts = 100;
     char prop[PROPERTY_VALUE_MAX];
     bool timeout = true;
     for (int i = 0; i < numAttempts; ++i) {
@@ -638,11 +621,11 @@ int VirtualCameraFactory::getCameraHalVersion(bool backCamera) {
      * 'remote.sf.back_camera_hal_version' boot properties. If the property
      * doesn't exist, it is assumed we are working with HAL v1.
      */
-    char prop[PROPERTY_VALUE_MAX];
+    char        prop[PROPERTY_VALUE_MAX];
     const char *propQuery = backCamera ? "remote.sf.back_camera_hal" : "remote.sf.front_camera_hal";
     if (property_get(propQuery, prop, nullptr) > 0) {
         char *propEnd = prop;
-        int val = strtol(prop, &propEnd, 10);
+        int   val     = strtol(prop, &propEnd, 10);
         if (*propEnd == '\0') {
             return val;
         }

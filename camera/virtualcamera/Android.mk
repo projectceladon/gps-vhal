@@ -71,7 +71,6 @@ emulator_camera_c_includes := external/libjpeg-turbo \
 emulator_camera_src := \
 	VirtualCameraHal.cpp \
 	VirtualCameraFactory.cpp \
-	VirtualCameraHotplugThread.cpp \
 	VirtualBaseCamera.cpp \
 	VirtualCamera.cpp \
 	VirtualCameraDevice.cpp \
