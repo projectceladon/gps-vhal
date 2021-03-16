@@ -100,10 +100,7 @@ emulator_camera_src := \
 	CameraSocketServerThread.cpp \
 	CameraSocketCommand.cpp \
 	cg-codec/src/cg_codec.cpp \
-	cg-codec/src/cg_protocol.cpp \
-	cg-codec/src/cg_timelog.cpp
-
-# Virtual camera - goldfish / vbox_x86 build###################################
+	cg-codec/src/cg_protocol.cpp
 
 LOCAL_VENDOR_MODULE := true
 LOCAL_MODULE_RELATIVE_PATH := ${emulator_camera_module_relative_path}
