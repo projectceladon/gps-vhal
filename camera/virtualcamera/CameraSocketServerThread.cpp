@@ -29,6 +29,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <array>
+#include <atomic>
 
 #include <errno.h>
 #include <netinet/in.h>
@@ -46,9 +47,13 @@
 android::ClientVideoBuffer *android::ClientVideoBuffer::ic_instance = 0;
 
 namespace android {
+
+using namespace socket;
 CameraSocketServerThread::CameraSocketServerThread(std::string suffix,
-                                                   std::shared_ptr<CGVideoDecoder> decoder)
-    : Thread(/*canCallJava*/ false), mRunning{true}, mSocketServerFd{-1}, mDecoder{decoder} {
+        std::shared_ptr<CGVideoDecoder> decoder,
+        std::atomic<CameraSessionState> &state)
+    : Thread(/*canCallJava*/ false), mRunning{true}, mSocketServerFd{-1},
+      mVideoDecoder{decoder}, mCameraSessionState{state} {
     std::string sock_path = "/ipc/camera-socket" + suffix;
     char *k8s_env_value = getenv("K8S_ENV");
     mSocketPath = (k8s_env_value != NULL && !strcmp(k8s_env_value, "true"))
@@ -178,10 +183,7 @@ bool CameraSocketServerThread::threadLoop() {
         ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
         char *fbuffer = (char *)handle->clientBuf[handle->clientRevCount % 1].buffer;
 
-        if (gIsInFrameI420) {
-            // TODO: Use width and height for current resolution
-            clearBuffer(fbuffer, 640, 480);
-        }
+        clearBuffer(fbuffer, 640, 480);
 
         struct pollfd fd;
         int event;
@@ -202,7 +204,7 @@ bool CameraSocketServerThread::threadLoop() {
                 shutdown(mClientFd, SHUT_RDWR);
                 close(mClientFd);
                 mClientFd = -1;
-                if (gIsInFrameI420) clearBuffer(fbuffer, 640, 480);
+                clearBuffer(fbuffer, 640, 480);
                 break;
             } else if (event & POLLIN) {  // preview / record
                 // data is available in socket => read data
@@ -221,7 +223,7 @@ bool CameraSocketServerThread::threadLoop() {
                     ssize_t size = 0;
                     if ((size = recv(mClientFd, (char *)&recv_frame_size, sizeof(size_t),
                                      MSG_WAITALL)) > 0) {
-                        ALOGI("[H264] Received Header %zd bytes. Payload size: %zu", size,
+                        ALOGVV("[H264] Received Header %zd bytes. Payload size: %zu", size,
                               recv_frame_size);
                         if (recv_frame_size > mSocketBuffer.size()) {
                             // maximum size of a H264 packet in any aggregation packet is 65535
@@ -235,10 +237,31 @@ bool CameraSocketServerThread::threadLoop() {
                         if ((size = recv(mClientFd, (char *)mSocketBuffer.data(), recv_frame_size,
                                          MSG_WAITALL)) > 0) {
                             mSocketBufferSize = recv_frame_size;
-                            mDecoder->decode(mSocketBuffer.data(), mSocketBufferSize);
-                            handle->clientRevCount++;
-                            ALOGI("[H264] Received Payload #%d %zd/%zu bytes",
-                                  handle->clientRevCount, size, recv_frame_size);
+                            ALOGI("%s [H264] Camera session state: %s", __func__,
+                                  kCameraSessionStateNames.at(mCameraSessionState).c_str());
+                            switch (mCameraSessionState) {
+                                case CameraSessionState::kCameraOpened:
+                                    mCameraSessionState = CameraSessionState::kDecodingStarted;
+                                    ALOGI("%s [H264] Decoding started now.", __func__);
+                                case CameraSessionState::kDecodingStarted:
+                                    mVideoDecoder->decode(mSocketBuffer.data(), mSocketBufferSize);
+                                    handle->clientRevCount++;
+                                    ALOGVV("%s [H264] Received Payload #%d %zd/%zu bytes", __func__,
+                                          handle->clientRevCount, size, recv_frame_size);
+                                    break;
+                                case CameraSessionState::kCameraClosed:
+                                    mVideoDecoder->flush_decoder();
+                                    mVideoDecoder->destroy();
+                                    mCameraSessionState = CameraSessionState::kDecodingStopped;
+                                    ALOGI("%s [H264] Decoding stopped now.", __func__);
+                                    break;
+                                case CameraSessionState::kDecodingStopped:
+                                    ALOGI("%s [H264] Decoding is already stopped, skip the packets",
+                                          __func__);
+                                default:
+                                    ALOGE("%s [H264] Invalid Camera session state!", __func__);
+                                    break;
+                            }
                         }
                     }
                 } else {

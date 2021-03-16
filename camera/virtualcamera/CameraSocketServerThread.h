@@ -26,6 +26,7 @@
 #include <utils/Vector.h>
 #include <string>
 #include <memory>
+#include <atomic>
 #include <array>
 #include "cg_codec.h"
 #include "CameraSocketCommand.h"
@@ -35,7 +36,8 @@ namespace android {
 class VirtualCameraFactory;
 class CameraSocketServerThread : public Thread {
 public:
-    CameraSocketServerThread(std::string suffix, std::shared_ptr<CGVideoDecoder> decoder);
+    CameraSocketServerThread(std::string suffix, std::shared_ptr<CGVideoDecoder> decoder,
+            std::atomic<socket::CameraSessionState> &state);
     ~CameraSocketServerThread();
 
     virtual void requestExit();
@@ -54,7 +56,8 @@ private:
     std::string mSocketPath;
     int mClientFd = -1;
 
-    std::shared_ptr<CGVideoDecoder> mDecoder;
+    std::shared_ptr<CGVideoDecoder> mVideoDecoder;
+    std::atomic<socket::CameraSessionState> &mCameraSessionState;
 
     // maximum size of a H264 packet in any aggregation packet is 65535 bytes.
     // Source: https://tools.ietf.org/html/rfc6184#page-13

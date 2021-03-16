@@ -52,6 +52,7 @@ using namespace chrono_literals;
 
 namespace android {
 
+using namespace socket;
 /**
  * Constants for camera capabilities
  */
@@ -95,11 +96,13 @@ const float VirtualFakeCamera3::kExposureWanderMax = 1;
 
 VirtualFakeCamera3::VirtualFakeCamera3(int cameraId, bool facingBack, struct hw_module_t *module,
                                        std::shared_ptr<CameraSocketServerThread> socket_server,
-                                       std::shared_ptr<CGVideoDecoder> decoder)
+                                       std::shared_ptr<CGVideoDecoder> decoder,
+                                       std::atomic<CameraSessionState> &state)
     : VirtualCamera3(cameraId, module),
       mFacingBack(facingBack),
       mSocketServer(socket_server),
-      mDecoder(decoder) {
+      mDecoder(decoder),
+      mCameraSessionState{state} {
     ALOGI("Constructing virtual fake camera 3: ID %d, facing %s", mCameraID,
           facingBack ? "back" : "front");
 
@@ -153,43 +156,60 @@ status_t VirtualFakeCamera3::Initialize(const char *device_name, const char *fra
     return VirtualCamera3::Initialize(nullptr, nullptr, nullptr);
 }
 
-status_t VirtualFakeCamera3::connectCamera(hw_device_t **device) {
-    ALOGI(LOG_TAG "%s: E", __FUNCTION__);
-    Mutex::Autolock l(mLock);
-    status_t res;
-
-    if (gIsInFrameH264) {
-        // initialize decoder
-        if (mDecoder->init(CAMERA_VIDEO_H264, CAMERA_RESOLUTION_VGA, "vaapi", 0) < 0) {
-            mDecoder.reset();
-            ALOGE("%s CGVideoDecoder init failed.", __func__);
-        } else
-            ALOGVV("%s CGVideoDecoder init done.", __func__);
-    }
+status_t VirtualFakeCamera3::sendCommandToClient(socket::CameraOperation operation) {
+    ALOGI("%s E", __func__);
 
     socket::CameraConfig camera_config = {};
-
-    camera_config.operation = socket::CameraOperation::kOpen;
+    camera_config.operation = operation;
 
     int client_fd = mSocketServer->getClientFd();
     if (client_fd < 0) {
         ALOGE("%s: We're not connected to client yet!", __FUNCTION__);
         return INVALID_OPERATION;
     }
-    ALOGI("%s: Connected to client %d!", __FUNCTION__, client_fd);
+    ALOGI("%s: Camera client fd %d!", __FUNCTION__, client_fd);
     if (send(client_fd, &camera_config, sizeof(camera_config), 0) < 0) {
         ALOGE(LOG_TAG "%s: Failed to send Camera Open command to client, err %s ", __FUNCTION__,
               strerror(errno));
         return INVALID_OPERATION;
     }
-    ALOGI("%s: Sent CMD_OPEN_CAMERA to client %d!", __FUNCTION__, client_fd);
-    mCameraConfig = camera_config;
+
+    std::string cmd_str =
+        (operation == socket::CameraOperation::kClose) ? "CloseCamera" : "OpenCamera";
+    ALOGI("%s: Sent cmd %s to client %d!", __FUNCTION__, cmd_str.c_str(), client_fd);
+    return OK;
+}
+
+status_t VirtualFakeCamera3::connectCamera(hw_device_t **device) {
+    ALOGI(LOG_TAG "%s: E", __FUNCTION__);
+    Mutex::Autolock l(mLock);
+
+    if (gIsInFrameH264) {
+        const char *device_name = gUseVaapi ? "vaapi" : nullptr;
+        // initialize decoder
+        if (mDecoder->init(CAMERA_VIDEO_H264, CAMERA_RESOLUTION_VGA, device_name, 0) < 0) {
+            ALOGE("%s VideoDecoder init failed. %s decoding", __func__,
+                  !device_name ? "SW" : device_name);
+        } else {
+            ALOGI("%s VideoDecoder init done. Device: %s", __func__,
+                  !device_name ? "SW" : device_name);
+        }
+    }
+
+    ALOGI("%s Calling sendCommandToClient", __func__);
+    status_t ret;
+    if ((ret = sendCommandToClient(socket::CameraOperation::kOpen)) != OK) {
+        ALOGE("%s sendCommandToClient failed", __func__);
+        return ret;
+    }
+    ALOGI("%s Called sendCommandToClient", __func__);
+    mCameraSessionState = socket::CameraSessionState::kCameraOpened;
 
     // create sensor who gets decoded frames and forwards them to framework
     mSensor = new Sensor(mSensorWidth, mSensorHeight, mDecoder);
     mSensor->setSensorListener(this);
 
-    res = mSensor->startUp();
+    status_t res = mSensor->startUp();
     if (res != NO_ERROR) return res;
 
     mReadoutThread = new ReadoutThread(this);
@@ -216,50 +236,27 @@ status_t VirtualFakeCamera3::connectCamera(hw_device_t **device) {
     return VirtualCamera3::connectCamera(device);
 }
 
+/**
+ * @brief  Closes Camera session.
+ * 1. Shutdown Sensor thread and purge all framework buffers.
+ * 2. Set Camera Session state to Close and wait for SocketServerThread to stop decoding.
+ * 3. Release ownershipt from this (VirtualFakeCamera3) object.
+ * 4. Send Close command to Client for stopping camera feed.
+ *
+ * @return status_t::OK if successfull, error otherwise.
+ */
 status_t VirtualFakeCamera3::closeCamera() {
     ALOGI(LOG_TAG " %s: E ", __FUNCTION__);
-    status_t res;
 
     // Workaround: first time after flash camera open close happens very fast
     // and start video stream didnt starts properly so need wait for start
     // stream. Need to be removed later once handle startPublication properly in
     // remote. If NO processCaptureRequest received between open and close then wait.
 
-    socket::CameraConfig camera_config;
-
-    camera_config.operation = socket::CameraOperation::kClose;
-
     if (!mprocessCaptureRequestFlag) {
         ALOGE(LOG_TAG " %s: wait:..", __FUNCTION__);
         std::this_thread::sleep_for(2500ms);
     }
-
-    // Send close command to client
-    auto client_fd = mSocketServer->getClientFd();
-    ALOGVV(LOG_TAG "%s: socket client fd: %d", __FUNCTION__, client_fd);
-    if (client_fd < 0) {
-        ALOGE("%s: We're not connected to client yet!", __FUNCTION__);
-        return INVALID_OPERATION;
-    }
-
-    if (send(client_fd, &camera_config, sizeof(camera_config), 0) < 0) {
-        ALOGE(LOG_TAG "%s: Failed to send Camera Close command to client, err %s ", __FUNCTION__,
-              strerror(errno));
-        return INVALID_OPERATION;
-    }
-    ALOGI("%s: Sent CMD_CLOSE_CAMERA to client %d!", __FUNCTION__, client_fd);
-
-    if (gIsInFrameH264) {
-        // Stop decode requests, if any.
-        mDecoder->destroy();
-        ALOGVV("%s CGVideoDecoder destroyed.", __func__);
-    }
-
-    ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
-    handle->reset();
-
-    ALOGVV("%s VideoBuffers reset", __func__);
-    mCameraConfig = camera_config;
 
     mprocessCaptureRequestFlag = false;
 
@@ -267,10 +264,10 @@ status_t VirtualFakeCamera3::closeCamera() {
         Mutex::Autolock l(mLock);
         if (mStatus == STATUS_CLOSED) return OK;
 
-        res = mSensor->shutDown();
-        if (res != NO_ERROR) {
-            ALOGE("%s: Unable to shut down sensor: %d", __FUNCTION__, res);
-            return res;
+        auto ret = mSensor->shutDown();
+        if (ret != NO_ERROR) {
+            ALOGE("%s: Unable to shut down sensor: %d", __FUNCTION__, ret);
+            return ret;
         }
         mSensor.clear();
 
@@ -290,8 +287,26 @@ status_t VirtualFakeCamera3::closeCamera() {
         mStreams.clear();
         mReadoutThread.clear();
     }
-    mCameraConfig = {};
-    mSocketServer->clearBuffer();
+
+    ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
+    handle->reset();
+    ALOGI("%s VideoBuffers are reset", __func__);
+
+    // Set state to CameraClosed, so that SocketServerThread stops decoding.
+    mCameraSessionState = socket::CameraSessionState::kCameraClosed;
+
+    if (gIsInFrameH264) {
+        while (mCameraSessionState != socket::CameraSessionState::kDecodingStopped)
+            std::this_thread::sleep_for(2ms);
+        ALOGI("%s Decoding is stopped, now send CLOSE command to client", __func__);
+    }
+
+    // Send close command to client
+    status_t ret = sendCommandToClient(socket::CameraOperation::kClose);
+    if (ret != OK) {
+        ALOGE("%s sendCommandToClient failed", __func__);
+        return ret;
+    }
 
     return VirtualCamera3::closeCamera();
 }
@@ -949,7 +964,8 @@ status_t VirtualFakeCamera3::processCaptureRequest(camera3_capture_request *requ
         destBuf.width = srcBuf.stream->width;
         destBuf.height = srcBuf.stream->height;
         destBuf.format = (srcBuf.stream->format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED)
-                ? HAL_PIXEL_FORMAT_RGBA_8888 : srcBuf.stream->format;
+                             ? HAL_PIXEL_FORMAT_RGBA_8888
+                             : srcBuf.stream->format;
         // Fix ME (dest buffer fixed for 640x480)
         // destBuf.width = 640;
         // destBuf.height = 480;

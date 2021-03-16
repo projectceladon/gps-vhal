@@ -25,6 +25,8 @@
 #define CAMERA_SOCKET_COMMAND_H
 
 #include <cstdint>
+#include <unordered_map>
+#include <string>
 
 namespace android {
 
@@ -40,6 +42,16 @@ struct CameraFrameInfo {
 };
 
 enum class CameraOperation { kOpen = 11, kClose = 12, kNone = 13 };
+
+enum class CameraSessionState {
+    kNone,
+    kCameraOpened,
+    kCameraClosed,
+    kDecodingStarted,
+    kDecodingStopped
+};
+
+extern const std::unordered_map<CameraSessionState, std::string> kCameraSessionStateNames;
 
 enum class CameraVHalVersion {
     kV1 = 0,  // decode out of camera vhal

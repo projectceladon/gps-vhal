@@ -132,6 +132,11 @@ public:
      */
     int get_decoded_frame(CGVideoFrame::Ptr cg_frame);
 
+    /**
+     * @brief Send flush packet to decoder, indicating end of decoding session.
+     *
+     * @return Returns 0 if decoder acknowledged Flush packet, non-zero if errored.
+     */
     int flush_decoder();
 
     /**
@@ -146,9 +151,7 @@ private:
     CGHWAccelContex m_hw_accel_ctx;  ///<! hw decoding accelerator context
     int decode_one_frame(const AVPacket *pkt);
     bool init_failed_ = false;
-    std::mutex mutex_;
 
-private:
     CGVideoDecoder(const CGVideoDecoder &cg_video_decoder);
     CGVideoDecoder &operator=(const CGVideoDecoder &) { return *this; }
 };

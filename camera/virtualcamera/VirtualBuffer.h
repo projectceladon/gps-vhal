@@ -8,6 +8,7 @@ namespace android {
 
 extern bool gIsInFrameI420;
 extern bool gIsInFrameH264;
+extern bool gUseVaapi;
 
 enum class VideoBufferType {
     kI420,
@@ -15,8 +16,8 @@ enum class VideoBufferType {
 };
 
 struct Resolution {
-    int width;
-    int height;
+    int width = 640;
+    int height = 480;
 };
 /// Video buffer and its information
 struct VideoBuffer {
@@ -26,10 +27,12 @@ struct VideoBuffer {
     Resolution resolution;
     // Buffer type
     VideoBufferType type;
-    ~VideoBuffer() { delete[] buffer; }
+    ~VideoBuffer() {}
 
     void reset() {
-        std::fill(buffer, buffer + 460800, 0);
+        std::fill(buffer, buffer + resolution.width * resolution.height, 0x10);
+        uint8_t* uv_offset = buffer + resolution.width * resolution.height;
+        std::fill(uv_offset, uv_offset + (resolution.width * resolution.height) / 2, 0x80);
         decoded = false;
     }
     bool decoded = false;
@@ -55,10 +58,17 @@ public:
 
     ClientVideoBuffer() {
         for (int i = 0; i < 1; i++) {
-            clientBuf[i].buffer = (uint8_t*)malloc(460800);
+            clientBuf[i].buffer =
+                new uint8_t[clientBuf[i].resolution.width * clientBuf[i].resolution.height * 3 / 2];
         }
         clientRevCount = 0;
         clientUsedCount = 0;
+    }
+
+    ~ClientVideoBuffer() {
+        for (int i = 0; i < 1; i++) {
+            delete[] clientBuf[i].buffer;
+        }
     }
 
     void reset() {

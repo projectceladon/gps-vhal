@@ -2,6 +2,7 @@
 #define EMU_CAMERA_GRALLOC_MODULE_H
 
 //#define LOG_NDEBUG 0
+#undef ALOGVV
 #if defined(LOG_NNDEBUG) && LOG_NNDEBUG == 0
 #define ALOGVV ALOGV
 #else

@@ -32,6 +32,7 @@
 #include <utils/List.h>
 #include <utils/Mutex.h>
 #include <memory>
+#include <atomic>
 #include "cg_codec.h"
 #include "CameraSocketServerThread.h"
 #include "CameraSocketCommand.h"
@@ -53,7 +54,8 @@ class VirtualFakeCamera3 : public VirtualCamera3, private Sensor::SensorListener
 public:
     VirtualFakeCamera3(int cameraId, bool facingBack, struct hw_module_t *module,
                        std::shared_ptr<CameraSocketServerThread> socket_server,
-                       std::shared_ptr<CGVideoDecoder> decoder);
+                       std::shared_ptr<CGVideoDecoder> decoder,
+                       std::atomic<socket::CameraSessionState> &state);
 
     virtual ~VirtualFakeCamera3();
 
@@ -192,8 +194,13 @@ private:
 
     // socket server
     std::shared_ptr<CameraSocketServerThread> mSocketServer;
-    // I420 Decoder
-    std::shared_ptr<CGVideoDecoder> mDecoder;
+    // NV12 Video decoder handle
+    std::shared_ptr<CGVideoDecoder> mDecoder = nullptr;
+
+    std::atomic<socket::CameraSessionState> &mCameraSessionState;
+
+    bool createSocketServer(bool facing_back);
+    status_t sendCommandToClient(socket::CameraOperation operation);
 
     /** Processing thread for sending out results */
 
@@ -297,8 +304,6 @@ private:
     // processCaptureRequest case. Take care First time camera open close after flash.
     // Flag becomes important in webRTC case where video stream takes time to open.
     bool mprocessCaptureRequestFlag = false;
-
-    socket::CameraConfig mCameraConfig = {};
 };
 
 }  // namespace android

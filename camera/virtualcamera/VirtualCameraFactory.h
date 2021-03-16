@@ -20,6 +20,7 @@
 #include "VirtualBaseCamera.h"
 #include "RemoteClient.h"
 
+#include <atomic>
 #include <cutils/properties.h>
 
 #include <utils/RefBase.h>
@@ -244,12 +245,13 @@ private:
      */
     int getCameraHalVersion(bool backCamera);
 
-    void readInputFrameFormat();
+    void readSystemProperties();
 
 private:
     /****************************************************************************
      * Data members.
      ***************************************************************************/
+    std::atomic<socket::CameraSessionState> mCameraSessionState;
 
     // Connection to the camera service in the emulator.
     FactoryRemoteClient mRemoteClient;

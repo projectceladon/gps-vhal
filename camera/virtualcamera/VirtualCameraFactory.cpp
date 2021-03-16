@@ -47,8 +47,9 @@ namespace android {
 
 bool gIsInFrameI420;
 bool gIsInFrameH264;
+bool gUseVaapi;
 
-void VirtualCameraFactory::readInputFrameFormat() {
+void VirtualCameraFactory::readSystemProperties() {
     char prop_val[PROPERTY_VALUE_MAX] = {'\0'};
 
     property_get("ro.vendor.camera.in_frame_format.h264", prop_val, "false");
@@ -57,7 +58,11 @@ void VirtualCameraFactory::readInputFrameFormat() {
     property_get("ro.vendor.camera.in_frame_format.i420", prop_val, "false");
     gIsInFrameI420 = !strcmp(prop_val, "true");
 
-    ALOGI("%s - gIsInFrameH264: %d, gIsInFrameI420: %d", __func__, gIsInFrameH264, gIsInFrameI420);
+    property_get("ro.vendor.camera.decode.vaapi", prop_val, "false");
+    gUseVaapi = !strcmp(prop_val, "true");
+
+    ALOGI("%s - gIsInFrameH264: %d, gIsInFrameI420: %d, gUseVaapi: %d", __func__, gIsInFrameH264,
+          gIsInFrameI420, gUseVaapi);
 }
 
 VirtualCameraFactory::VirtualCameraFactory()
@@ -74,6 +79,8 @@ VirtualCameraFactory::VirtualCameraFactory()
     int virtualCamerasSize = 0;
 
     virtualCamerasSize = 2;  // Reserve two remote cameras
+
+    mCameraSessionState = socket::CameraSessionState::kNone;
 
     waitForRemoteSfFakeCameraPropertyAvailable();
     // Fake Cameras
@@ -101,7 +108,7 @@ VirtualCameraFactory::VirtualCameraFactory()
         }
     }
 
-    readInputFrameFormat();
+    readSystemProperties();
 
     if (gIsInFrameH264) {
         // create decoder
@@ -142,7 +149,8 @@ bool VirtualCameraFactory::createSocketServer(std::shared_ptr<CGVideoDecoder> de
 
     char id[PROPERTY_VALUE_MAX] = {0};
     if (property_get("ro.boot.container.id", id, "") > 0) {
-        mSocketServer = std::make_shared<CameraSocketServerThread>(id, decoder);
+        mSocketServer = std::make_shared<CameraSocketServerThread>(id, decoder,
+                                std::ref(mCameraSessionState));
 
         mSocketServer->run("BackVirtualCameraSocketServerThread");
     } else
@@ -558,7 +566,8 @@ void VirtualCameraFactory::createFakeCamera(std::shared_ptr<CameraSocketServerTh
         case 3: {
             mVirtualCameras[mVirtualCameraNum] =
                 new VirtualFakeCamera3(mVirtualCameraNum, backCamera,
-                                           &HAL_MODULE_INFO_SYM.common, socket_server, decoder);
+                                           &HAL_MODULE_INFO_SYM.common, socket_server, decoder,
+                                           std::ref(mCameraSessionState));
         } break;
         default:
             ALOGE("%s: Unknown %s camera hal version requested: %d", __FUNCTION__,

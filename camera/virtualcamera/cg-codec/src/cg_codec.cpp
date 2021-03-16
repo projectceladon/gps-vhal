@@ -14,6 +14,16 @@
 ** limitations under the License.
 */
 
+//#define LOG_NDEBUG 0
+//#define LOG_NNDEBUG 0
+#define LOG_TAG "cg_codec_vhal"
+
+#ifdef LOG_NNDEBUG
+#define ALOGVV(...) ALOGV(__VA_ARGS__)
+#else
+#define ALOGVV(...) ((void)0)
+#endif
+
 #include <vector>
 #include <mutex>
 #include "cg_codec.h"
@@ -35,7 +45,7 @@ CGPixelFormat CGVideoFrame::format() {
 }
 
 int CGVideoFrame::copy_to_buffer(uint8_t **buffer, int *size) {
-    ALOGD("%s", __func__);
+    ALOGVV("%s E", __func__);
 
     if (!buffer || !size) {
         ALOGW("Bad input parameter.\n");
@@ -62,12 +72,12 @@ int CGVideoFrame::copy_to_buffer(uint8_t **buffer, int *size) {
 
     *size = buf_size;
     *buffer = out_buffer;
-    ALOGI("%s: out", __func__);
+    ALOGVV("%s: X", __func__);
     return 0;
 }
 
 int CGVideoFrame::copy_to_buffer(uint8_t *out_buffer, int *size) {
-    ALOGD("%s", __func__);
+    ALOGVV("%s E", __func__);
 
     if (!out_buffer || !size) {
         ALOGW("Bad input parameter.\n");
@@ -87,7 +97,7 @@ int CGVideoFrame::copy_to_buffer(uint8_t *out_buffer, int *size) {
     }
 
     *size = buf_size;
-    ALOGI("%s: out", __func__);
+    ALOGVV("%s: X", __func__);
     return 0;
 }
 //////// @class DecodeContext ////////
@@ -214,6 +224,7 @@ bool CGVideoDecoder::can_decode() const { return !init_failed_; }
 int CGVideoDecoder::init(int codec_type, int resolution_type, const char *device_name,
                          int extra_hw_frames) {
     m_decode_ctx = CGDecContex(new DecodeContext(codec_type, resolution_type));
+    init_failed_ = true;
 
     AVCodecID codec_id = AV_CODEC_ID_NONE;
     if (codec_type == CAMERA_VIDEO_JPEG) {
@@ -228,57 +239,58 @@ int CGVideoDecoder::init(int codec_type, int resolution_type, const char *device
         return -1;
     }
 
-    AVCodecParserContext *parser = nullptr;
-    AVCodecContext *c = nullptr;
-    AVPacket *pkt = nullptr;
-
-    parser = av_parser_init(codec->id);
+    AVCodecParserContext *parser = av_parser_init(codec->id);
     if (parser == nullptr) {
         ALOGW("Parser not found!");
-        goto failed;
+        return -1;
     }
 
-    c = avcodec_alloc_context3(codec);
+    AVCodecContext *c = avcodec_alloc_context3(codec);
     if (c == nullptr) {
         ALOGW("Could not allocate video codec context\n");
-        goto failed;
+        av_parser_close(parser);
+        return -1;
     }
 
     if (device_name != nullptr) {
         m_hw_accel_ctx =
             CGHWAccelContex(new HWAccelContext(codec, c, device_name, extra_hw_frames));
-        ALOGI("Use device %s to accelerate decoding!\n", device_name);
+        if (m_hw_accel_ctx->is_hw_accel_valid()) {
+            ALOGI("%s Use device %s to accelerate decoding!", __func__, device_name);
+        } else {
+            ALOGW("%s System doesn't support VAAPI(Video Acceleration API). SW Decoding is used.!",
+                  __func__);
+        }
     }
 
-    pkt = av_packet_alloc();
+    AVPacket *pkt = av_packet_alloc();
     if (pkt == nullptr) {
         ALOGW("Could not allocate packet\n");
-        goto failed;
+        av_parser_close(parser);
+        avcodec_free_context(&c);
+        return -1;
     }
 
     if (avcodec_open2(c, codec, NULL) < 0) {
         ALOGW("Could not open codec\n");
-        goto failed;
+        av_parser_close(parser);
+        avcodec_free_context(&c);
+        av_packet_free(&pkt);
+        return -1;
     }
 
     m_decode_ctx->parser = parser;
     m_decode_ctx->avcodec_ctx = c;
     m_decode_ctx->packet = pkt;
+    init_failed_ = false;
     return 0;
-
-failed:
-    av_parser_close(parser);
-    avcodec_free_context(&c);
-    av_packet_free(&pkt);
-    init_failed_ = true;
-    return -1;
 }
 
 int CGVideoDecoder::decode(const uint8_t *data, int data_size) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (!m_decode_ctx || data == nullptr || data_size <= 0) {
-        ALOGE("Invalid args: m_decode_ctx: %p, data: %p, data_size: %d", m_decode_ctx.get(), data,
-              data_size);
+    ALOGVV("%s E", __func__);
+    if (data == nullptr || data_size <= 0) {
+        ALOGE("%s Invalid args: m_decode_ctx: %p, data: %p, data_size: %d", __func__,
+              m_decode_ctx.get(), data, data_size);
         return -1;
     }
 
@@ -286,11 +298,14 @@ int CGVideoDecoder::decode(const uint8_t *data, int data_size) {
     AVCodecParserContext *parser = m_decode_ctx->parser;
 
     while (data_size > 0) {
+        ALOGVV("%s data_size: %d\n", __func__, data_size);
         int ret = av_parser_parse2(parser, m_decode_ctx->avcodec_ctx, &pkt->data, &pkt->size, data,
                                    data_size, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
         if (ret < 0) {
-            ALOGW("Error while parsing\n");
+            ALOGW("%s Error while parsing\n", __func__);
             return -1;
+        } else {
+            ALOGVV("%s av_parser_parse2 returned %d pkt->size: %d\n", __func__, ret, pkt->size);
         }
         data += ret;
         data_size -= ret;
@@ -298,11 +313,12 @@ int CGVideoDecoder::decode(const uint8_t *data, int data_size) {
         if (pkt->size) decode_one_frame(pkt);
     }
 
+    ALOGVV("%s X", __func__);
     return 0;
 }
 
 int CGVideoDecoder::decode_one_frame(const AVPacket *pkt) {
-    AVFrame *frame = nullptr;
+    ALOGVV("%s E", __func__);
     AVCodecContext *c = m_decode_ctx->avcodec_ctx;
 
     int sent = avcodec_send_packet(c, pkt);
@@ -312,6 +328,7 @@ int CGVideoDecoder::decode_one_frame(const AVPacket *pkt) {
     }
 
     int decode_stat = 0;
+    AVFrame *frame = nullptr;
     while (decode_stat >= 0) {
         if (frame == nullptr) {
             frame = av_frame_alloc();
@@ -321,9 +338,11 @@ int CGVideoDecoder::decode_one_frame(const AVPacket *pkt) {
             }
         }
         decode_stat = avcodec_receive_frame(c, frame);
-        if (decode_stat == AVERROR(EAGAIN) || decode_stat == AVERROR_EOF)
+        if (decode_stat == AVERROR(EAGAIN) || decode_stat == AVERROR_EOF) {
+            ALOGW("%s avcodec_receive_frame returned AVERROR(EAGAIN) | AVERROR_EOF%d\n", __func__,
+                  decode_stat);
             break;
-        else if (decode_stat < 0) {
+        } else if (decode_stat < 0) {
             ALOGW("Error during decoding\n");
             av_frame_free(&frame);
             return -1;
@@ -357,7 +376,8 @@ int CGVideoDecoder::decode_one_frame(const AVPacket *pkt) {
 
             av_frame_free(&frame);
             frame = sw_frame;
-        }
+        } else
+            ALOGVV("%s Camera VHAL uses SW decoding", __func__);
 
         // push decoded frame
         {
@@ -368,13 +388,15 @@ int CGVideoDecoder::decode_one_frame(const AVPacket *pkt) {
     }
 
     av_frame_free(&frame);
+    ALOGVV("%s X", __func__);
     return 0;
 }
 
 int CGVideoDecoder::get_decoded_frame(CGVideoFrame::Ptr cg_frame) {
     std::lock_guard<std::mutex> lock(m_decode_ctx->mutex_);
 
-    if (m_decode_ctx->decoded_frames.empty()) return -1;
+    if (m_decode_ctx->decoded_frames.empty())
+        return -1;
 
     // return the frame in the front
     auto it = m_decode_ctx->decoded_frames.begin();
@@ -398,18 +420,14 @@ int CGVideoDecoder::flush_decoder() {
 
     int sent = avcodec_send_packet(c, packet);
     if (sent < 0) {
-        ALOGW("%s Error sending a packet for decoding\n", __func__);
+        ALOGW("%s Error sending a flush packet to decoder", __func__);
         return -1;
-    } else {
-        ALOGI("%s Success avcodec_send_packet() = %d", __func__, sent);
     }
+    ALOGVV("%s Successfully sent flush packet to decoder: %d", __func__, sent);
     return 0;
 }
 
 int CGVideoDecoder::destroy() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    flush_decoder();
-
     av_parser_close(m_decode_ctx->parser);
     avcodec_free_context(&m_decode_ctx->avcodec_ctx);
     av_packet_free(&m_decode_ctx->packet);
@@ -420,7 +438,6 @@ int CGVideoDecoder::destroy() {
         }
         m_decode_ctx->decoded_frames.clear();
     }
-    m_decode_ctx.reset();
 
     return 0;
 }

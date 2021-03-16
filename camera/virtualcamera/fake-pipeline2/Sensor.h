@@ -268,7 +268,7 @@ private:
 
     std::shared_ptr<CGVideoDecoder> mDecoder = {};
 
-    bool getNV12Frames(uint8_t *out_buf, int *out_size, std::chrono::milliseconds timeout_ms = 4ms);
+    bool getNV12Frames(uint8_t *out_buf, int *out_size, std::chrono::milliseconds timeout_ms = 5ms);
     void dump_yuv(uint8_t *img1, size_t img1_size, uint8_t *img2, size_t img2_size,
                   const std::string &filename);
 };

@@ -99,6 +99,7 @@ emulator_camera_src := \
 	Thumbnail.cpp \
 	WorkerThread.cpp \
 	CameraSocketServerThread.cpp \
+	CameraSocketCommand.cpp \
 	cg-codec/src/cg_codec.cpp \
 	cg-codec/src/cg_protocol.cpp \
 	cg-codec/src/cg_timelog.cpp
@@ -108,6 +109,7 @@ emulator_camera_src := \
 LOCAL_VENDOR_MODULE := true
 LOCAL_MODULE_RELATIVE_PATH := ${emulator_camera_module_relative_path}
 LOCAL_CFLAGS := ${emulator_camera_cflags}
+LOCAL_CPPFLAGS += -std=c++17
 LOCAL_CLANG_CFLAGS += ${emulator_camera_clang_flags}
 
 LOCAL_SHARED_LIBRARIES := ${emulator_camera_shared_libraries}

@@ -383,6 +383,7 @@ bool Sensor::threadLoop() {
             }
         }
     }
+
     ALOGVV("Sensor Thread stage X :3");
 
     ALOGVV("Sensor Thread stage E :4");
@@ -472,16 +473,32 @@ void Sensor::dump_yuv(uint8_t *img1, size_t img1_size, uint8_t *img2, size_t img
 bool Sensor::getNV12Frames(uint8_t *out_buf, int *out_size,
                            std::chrono::milliseconds timeout_ms /* default 5ms */) {
     auto cg_video_frame = std::make_shared<CGVideoFrame>();
+    size_t retry_count = 0;
+    size_t maxRetryCount;
+
+    if (!gUseVaapi) {  // SW decoding
+        timeout_ms = 10ms;
+        maxRetryCount = 10;
+    } else {
+        maxRetryCount = 5;
+    }
+
     do {
         int ret = mDecoder->get_decoded_frame(cg_video_frame);
         if (ret == 0) {  // success
             ALOGVV("%s frames are decoded", __func__);
             break;
-        } else {  // decoded frames are not ready
-            ALOGE("[cg_codec] get_decoded_frame() not ready, lets wait for %zums",
-                  size_t(timeout_ms.count()));
+        } else if (retry_count++ <= maxRetryCount) {  // decoded frames are not ready
+            ALOGE("%s retry #%zu get_decoded_frame() not ready, lets wait for %zums", __func__,
+                  retry_count, size_t(timeout_ms.count()));
             std::this_thread::sleep_for(timeout_ms);
             continue;
+        } else if (retry_count > maxRetryCount) {
+            ALOGE(
+                "%s Failed to get decoded frames even after retrying %zu times with total timeout "
+                "of %zums",
+                __func__, (retry_count - 1), (retry_count - 1) * size_t(timeout_ms.count()));
+            return false;
         }
     } while (true);
 
@@ -540,14 +557,14 @@ void Sensor::captureRGBA(uint8_t *img, uint32_t gain, uint32_t width, uint32_t h
         if (gIsInFrameI420) {
             ALOGVV(LOG_TAG " %s: I420, scaling not required: Size = %dx%d", __FUNCTION__, width,
                    height);
-            const uint8_t *src_y           = bufData;
-            int            src_stride_y    = mSrcWidth;
-            const uint8_t *src_u           = bufData + src_size;
-            int            src_stride_u    = src_stride_y >> 1;
-            const uint8_t *src_v           = bufData + src_size + src_size / 4;
-            int            src_stride_v    = src_stride_y >> 1;
-            uint8_t *      dst_abgr        = img;
-            int            dst_stride_abgr = width * 4;
+            const uint8_t *src_y = bufData;
+            int src_stride_y = mSrcWidth;
+            const uint8_t *src_u = bufData + src_size;
+            int src_stride_u = src_stride_y >> 1;
+            const uint8_t *src_v = bufData + src_size + src_size / 4;
+            int src_stride_v = src_stride_y >> 1;
+            uint8_t *dst_abgr = img;
+            int dst_stride_abgr = width * 4;
 
             if (int ret =
                     libyuv::I420ToABGR(src_y, src_stride_y, src_u, src_stride_u, src_v,
@@ -556,12 +573,12 @@ void Sensor::captureRGBA(uint8_t *img, uint32_t gain, uint32_t width, uint32_t h
         } else {
             ALOGVV(LOG_TAG " %s: NV12, scaling not required: Size = %dx%d", __FUNCTION__, width,
                    height);
-            const uint8_t *src_y           = bufData;
-            int            src_stride_y    = mSrcWidth;
-            const uint8_t *src_uv          = bufData + src_size;
-            int            src_stride_uv   = width;
-            uint8_t *      dst_abgr        = img;
-            int            dst_stride_abgr = width * 4;
+            const uint8_t *src_y = bufData;
+            int src_stride_y = mSrcWidth;
+            const uint8_t *src_uv = bufData + src_size;
+            int src_stride_uv = width;
+            uint8_t *dst_abgr = img;
+            int dst_stride_abgr = width * 4;
 
             if (int ret = libyuv::NV12ToABGR(src_y, src_stride_y, src_uv, src_stride_uv, dst_abgr,
                                              dst_stride_abgr, width, height)) {
@@ -573,23 +590,23 @@ void Sensor::captureRGBA(uint8_t *img, uint32_t gain, uint32_t width, uint32_t h
             ALOGVV(LOG_TAG " %s: I420, need to scale: Size = %dx%d", __FUNCTION__, width, height);
             int destFrameSize = width * height;
 
-            const uint8_t *src_y        = bufData;
-            int            src_stride_y = mSrcWidth;
-            const uint8_t *src_u        = bufData + src_size;
-            int            src_stride_u = src_stride_y >> 1;
-            const uint8_t *src_v        = bufData + src_size + src_size / 4;
-            int            src_stride_v = src_stride_y >> 1;
-            int            src_width    = mSrcWidth;
-            int            src_height   = mSrcHeight;
-            uint8_t *      dst_y        = mDstPrevBuf.data();
-            int            dst_stride_y = width;
-            uint8_t *      dst_u        = mDstPrevBuf.data() + destFrameSize;
-            int            dst_stride_u = width >> 1;
-            uint8_t *      dst_v        = mDstPrevBuf.data() + destFrameSize + destFrameSize / 4;
-            int            dst_stride_v = width >> 1;
-            int            dst_width    = width;
-            int            dst_height   = height;
-            auto           filtering    = libyuv::kFilterNone;
+            const uint8_t *src_y = bufData;
+            int src_stride_y = mSrcWidth;
+            const uint8_t *src_u = bufData + src_size;
+            int src_stride_u = src_stride_y >> 1;
+            const uint8_t *src_v = bufData + src_size + src_size / 4;
+            int src_stride_v = src_stride_y >> 1;
+            int src_width = mSrcWidth;
+            int src_height = mSrcHeight;
+            uint8_t *dst_y = mDstPrevBuf.data();
+            int dst_stride_y = width;
+            uint8_t *dst_u = mDstPrevBuf.data() + destFrameSize;
+            int dst_stride_u = width >> 1;
+            uint8_t *dst_v = mDstPrevBuf.data() + destFrameSize + destFrameSize / 4;
+            int dst_stride_v = width >> 1;
+            int dst_width = width;
+            int dst_height = height;
+            auto filtering = libyuv::kFilterNone;
 
             if (int ret = libyuv::I420Scale(src_y, src_stride_y, src_u, src_stride_u, src_v,
                                             src_stride_v, src_width, src_height, dst_y,
@@ -614,40 +631,40 @@ void Sensor::captureRGBA(uint8_t *img, uint32_t gain, uint32_t width, uint32_t h
         } else {
             ALOGVV(LOG_TAG " %s: NV12 scaling required: Size = %dx%d", __FUNCTION__, width, height);
 
-            const uint8_t *src_y         = bufData;
-            int            src_stride_y  = mSrcWidth;
-            const uint8_t *src_uv        = bufData + src_size;
-            int            src_stride_uv = mSrcWidth;
-            uint8_t *      dst_y         = mDstTempPrevBuf.data();
-            int            dst_stride_y  = mSrcWidth;
-            uint8_t *      dst_u         = mDstTempPrevBuf.data() + src_size;
-            int            dst_stride_u  = mSrcWidth >> 1;
-            uint8_t *      dst_v         = mDstTempPrevBuf.data() + src_size + src_size / 4;
-            int            dst_stride_v  = mSrcWidth >> 1;
+            const uint8_t *src_y = bufData;
+            int src_stride_y = mSrcWidth;
+            const uint8_t *src_uv = bufData + src_size;
+            int src_stride_uv = mSrcWidth;
+            uint8_t *dst_y = mDstTempPrevBuf.data();
+            int dst_stride_y = mSrcWidth;
+            uint8_t *dst_u = mDstTempPrevBuf.data() + src_size;
+            int dst_stride_u = mSrcWidth >> 1;
+            uint8_t *dst_v = mDstTempPrevBuf.data() + src_size + src_size / 4;
+            int dst_stride_v = mSrcWidth >> 1;
 
             if (int ret = libyuv::NV12ToI420(src_y, src_stride_y, src_uv, src_stride_uv, dst_y,
                                              dst_stride_y, dst_u, dst_stride_u, dst_v, dst_stride_v,
                                              mSrcWidth, mSrcHeight)) {
             }
 
-            src_y                       = mDstTempPrevBuf.data();
-            src_stride_y                = mSrcWidth;
-            const uint8_t *src_u        = mDstTempPrevBuf.data() + src_size;
-            int            src_stride_u = mSrcWidth >> 1;
-            const uint8_t *src_v        = mDstTempPrevBuf.data() + src_size + src_size / 4;
-            int            src_stride_v = mSrcWidth >> 1;
-            int            src_width    = mSrcWidth;
-            int            src_height   = mSrcHeight;
+            src_y = mDstTempPrevBuf.data();
+            src_stride_y = mSrcWidth;
+            const uint8_t *src_u = mDstTempPrevBuf.data() + src_size;
+            int src_stride_u = mSrcWidth >> 1;
+            const uint8_t *src_v = mDstTempPrevBuf.data() + src_size + src_size / 4;
+            int src_stride_v = mSrcWidth >> 1;
+            int src_width = mSrcWidth;
+            int src_height = mSrcHeight;
 
-            dst_y           = mDstPrevBuf.data();
-            dst_stride_y    = width;
-            dst_u           = mDstPrevBuf.data() + dstFrameSize;
-            dst_stride_u    = width >> 1;
-            dst_v           = mDstPrevBuf.data() + dstFrameSize + dstFrameSize / 4;
-            dst_stride_v    = width >> 1;
-            int  dst_width  = width;
-            int  dst_height = height;
-            auto filtering  = libyuv::kFilterNone;
+            dst_y = mDstPrevBuf.data();
+            dst_stride_y = width;
+            dst_u = mDstPrevBuf.data() + dstFrameSize;
+            dst_stride_u = width >> 1;
+            dst_v = mDstPrevBuf.data() + dstFrameSize + dstFrameSize / 4;
+            dst_stride_v = width >> 1;
+            int dst_width = width;
+            int dst_height = height;
+            auto filtering = libyuv::kFilterNone;
 
             if (int ret = libyuv::I420Scale(src_y, src_stride_y, src_u, src_stride_u, src_v,
                                             src_stride_v, src_width, src_height, dst_y,
@@ -655,15 +672,15 @@ void Sensor::captureRGBA(uint8_t *img, uint32_t gain, uint32_t width, uint32_t h
                                             dst_width, dst_height, filtering)) {
             }
 
-            src_y        = mDstPrevBuf.data();
+            src_y = mDstPrevBuf.data();
             src_stride_y = width;
-            src_u        = mDstPrevBuf.data() + dstFrameSize;
+            src_u = mDstPrevBuf.data() + dstFrameSize;
             src_stride_u = width >> 1;
-            src_v        = mDstPrevBuf.data() + dstFrameSize + dstFrameSize / 4;
+            src_v = mDstPrevBuf.data() + dstFrameSize + dstFrameSize / 4;
             src_stride_v = width >> 1;
 
-            uint8_t *dst_abgr        = img;
-            int      dst_stride_abgr = width * 4;
+            uint8_t *dst_abgr = img;
+            int dst_stride_abgr = width * 4;
 
             if (int ret =
                     libyuv::I420ToABGR(src_y, src_stride_y, src_u, src_stride_u, src_v,
@@ -743,10 +760,8 @@ void Sensor::captureNV12(uint8_t *img, uint32_t gain, uint32_t width, uint32_t h
     ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
     uint8_t *bufData = handle->clientBuf[handle->clientRevCount % 1].buffer;
 
-    ALOGVV(LOG_TAG
-           " %s: Total Frame recv vs Total Renderred [%d:%d] bufData[%p] img[%p] "
-           "resolution[%d:%d]",
-           __func__, handle->clientRevCount, handle->clientUsedCount, bufData, img, width, height);
+    ALOGVV(LOG_TAG " %s: bufData[%p] img[%p] resolution[%d:%d]",
+           __func__, bufData, img, width, height);
 
     int src_size = mSrcWidth * mSrcHeight;
     int dstFrameSize = width * height;
@@ -790,16 +805,16 @@ void Sensor::captureNV12(uint8_t *img, uint32_t gain, uint32_t width, uint32_t h
             // For I420 input support
             ALOGVV(LOG_TAG " %s: I420 no scaling required Size = %dx%d", __FUNCTION__, width,
                    height);
-            const uint8_t *src_y         = bufData;
-            int            src_stride_y  = mSrcWidth;
-            const uint8_t *src_u         = bufData + src_size;
-            int            src_stride_u  = mSrcWidth >> 1;
-            const uint8_t *src_v         = bufData + src_size + src_size / 4;
-            int            src_stride_v  = mSrcWidth >> 1;
-            uint8_t *      dst_y         = img;
-            int            dst_stride_y  = width;
-            uint8_t *      dst_uv        = dst_y + src_size;
-            int            dst_stride_uv = width;
+            const uint8_t *src_y = bufData;
+            int src_stride_y = mSrcWidth;
+            const uint8_t *src_u = bufData + src_size;
+            int src_stride_u = mSrcWidth >> 1;
+            const uint8_t *src_v = bufData + src_size + src_size / 4;
+            int src_stride_v = mSrcWidth >> 1;
+            uint8_t *dst_y = img;
+            int dst_stride_y = width;
+            uint8_t *dst_uv = dst_y + src_size;
+            int dst_stride_uv = width;
             if (m_major_version == 1) {
                 ALOGVV(LOG_TAG " %s: [SG1] convert I420 to NV12!", __FUNCTION__);
                 if (int ret = libyuv::I420ToNV12(src_y, src_stride_y, src_u, src_stride_u, src_v,
@@ -825,23 +840,23 @@ void Sensor::captureNV12(uint8_t *img, uint32_t gain, uint32_t width, uint32_t h
             // For I420 input support
             ALOGVV(LOG_TAG " %s: I420 with scaling: Size = %dx%d", __FUNCTION__, width, height);
 
-            const uint8_t *src_y        = bufData;
-            int            src_stride_y = mSrcWidth;
-            const uint8_t *src_u        = bufData + src_size;
-            int            src_stride_u = src_stride_y >> 1;
-            const uint8_t *src_v        = bufData + src_size + src_size / 4;
-            int            src_stride_v = src_stride_y >> 1;
-            int            src_width    = mSrcWidth;
-            int            src_height   = mSrcHeight;
-            uint8_t *      dst_y        = mDstBuf.data();
-            int            dst_stride_y = width;
-            uint8_t *      dst_u        = mDstBuf.data() + dstFrameSize;
-            int            dst_stride_u = width >> 1;
-            uint8_t *      dst_v        = mDstBuf.data() + dstFrameSize + dstFrameSize / 4;
-            int            dst_stride_v = width >> 1;
-            int            dst_width    = width;
-            int            dst_height   = height;
-            auto           filtering    = libyuv::kFilterNone;
+            const uint8_t *src_y = bufData;
+            int src_stride_y = mSrcWidth;
+            const uint8_t *src_u = bufData + src_size;
+            int src_stride_u = src_stride_y >> 1;
+            const uint8_t *src_v = bufData + src_size + src_size / 4;
+            int src_stride_v = src_stride_y >> 1;
+            int src_width = mSrcWidth;
+            int src_height = mSrcHeight;
+            uint8_t *dst_y = mDstBuf.data();
+            int dst_stride_y = width;
+            uint8_t *dst_u = mDstBuf.data() + dstFrameSize;
+            int dst_stride_u = width >> 1;
+            uint8_t *dst_v = mDstBuf.data() + dstFrameSize + dstFrameSize / 4;
+            int dst_stride_v = width >> 1;
+            int dst_width = width;
+            int dst_height = height;
+            auto filtering = libyuv::kFilterNone;
 
             if (int ret = libyuv::I420Scale(src_y, src_stride_y, src_u, src_stride_u, src_v,
                                             src_stride_v, src_width, src_height, dst_y,
@@ -851,17 +866,17 @@ void Sensor::captureNV12(uint8_t *img, uint32_t gain, uint32_t width, uint32_t h
 
             ALOGVV("%s: I420, Scaling done!", __FUNCTION__);
 
-            src_y        = mDstBuf.data();
+            src_y = mDstBuf.data();
             src_stride_y = width;
-            src_u        = mDstBuf.data() + dstFrameSize;
+            src_u = mDstBuf.data() + dstFrameSize;
             src_stride_u = width >> 1;
-            src_v        = mDstBuf.data() + dstFrameSize + dstFrameSize / 4;
+            src_v = mDstBuf.data() + dstFrameSize + dstFrameSize / 4;
             src_stride_v = width >> 1;
-            dst_y        = img;
+            dst_y = img;
             dst_stride_y = width;
 
-            uint8_t *dst_uv        = dst_y + width * height;
-            int      dst_stride_uv = width;
+            uint8_t *dst_uv = dst_y + width * height;
+            int dst_stride_uv = width;
 
             if (m_major_version == 1) {
                 ALOGVV(LOG_TAG " %s: [SG1] convert I420 to NV12!", __FUNCTION__);
@@ -880,58 +895,58 @@ void Sensor::captureNV12(uint8_t *img, uint32_t gain, uint32_t width, uint32_t h
             // For NV12 Input support
             ALOGVV(LOG_TAG " %s: H264 with scaling Size = %dx%d", __FUNCTION__, width, height);
 
-            const uint8_t *src_y         = bufData;
-            int            src_stride_y  = mSrcWidth;
-            const uint8_t *src_uv        = bufData + src_size;
-            int            src_stride_uv = mSrcWidth;
-            uint8_t *      dst_y         = mDstTempBuf.data();
-            int            dst_stride_y  = mSrcWidth;
-            uint8_t *      dst_u         = mDstTempBuf.data() + src_size;
-            int            dst_stride_u  = mSrcWidth >> 1;
-            uint8_t *      dst_v         = mDstTempBuf.data() + src_size + src_size / 4;
-            int            dst_stride_v  = mSrcWidth >> 1;
+            const uint8_t *src_y = bufData;
+            int src_stride_y = mSrcWidth;
+            const uint8_t *src_uv = bufData + src_size;
+            int src_stride_uv = mSrcWidth;
+            uint8_t *dst_y = mDstTempBuf.data();
+            int dst_stride_y = mSrcWidth;
+            uint8_t *dst_u = mDstTempBuf.data() + src_size;
+            int dst_stride_u = mSrcWidth >> 1;
+            uint8_t *dst_v = mDstTempBuf.data() + src_size + src_size / 4;
+            int dst_stride_v = mSrcWidth >> 1;
 
             if (int ret = libyuv::NV12ToI420(src_y, src_stride_y, src_uv, src_stride_uv, dst_y,
                                              dst_stride_y, dst_u, dst_stride_u, dst_v, dst_stride_v,
                                              mSrcWidth, mSrcHeight)) {
             }
 
-            src_y        = mDstTempBuf.data();
+            src_y = mDstTempBuf.data();
             src_stride_y = mSrcWidth;
 
-            uint8_t *      src_u        = mDstTempBuf.data() + src_size;
-            int            src_stride_u = src_stride_y >> 1;
-            const uint8_t *src_v        = mDstTempBuf.data() + src_size + src_size / 4;
-            int            src_stride_v = src_stride_y >> 1;
-            int            src_width    = mSrcWidth;
-            int            src_height   = mSrcHeight;
+            uint8_t *src_u = mDstTempBuf.data() + src_size;
+            int src_stride_u = src_stride_y >> 1;
+            const uint8_t *src_v = mDstTempBuf.data() + src_size + src_size / 4;
+            int src_stride_v = src_stride_y >> 1;
+            int src_width = mSrcWidth;
+            int src_height = mSrcHeight;
 
-            dst_y           = mDstBuf.data();
-            dst_stride_y    = width;
-            dst_u           = mDstBuf.data() + dstFrameSize;
-            dst_stride_u    = width >> 1;
-            dst_v           = mDstBuf.data() + dstFrameSize + dstFrameSize / 4;
-            dst_stride_v    = width >> 1;
-            int  dst_width  = width;
-            int  dst_height = height;
-            auto filtering  = libyuv::kFilterNone;
+            dst_y = mDstBuf.data();
+            dst_stride_y = width;
+            dst_u = mDstBuf.data() + dstFrameSize;
+            dst_stride_u = width >> 1;
+            dst_v = mDstBuf.data() + dstFrameSize + dstFrameSize / 4;
+            dst_stride_v = width >> 1;
+            int dst_width = width;
+            int dst_height = height;
+            auto filtering = libyuv::kFilterNone;
 
             if (int ret = libyuv::I420Scale(src_y, src_stride_y, src_u, src_stride_u, src_v,
                                             src_stride_v, src_width, src_height, dst_y,
                                             dst_stride_y, dst_u, dst_stride_u, dst_v, dst_stride_v,
                                             dst_width, dst_height, filtering)) {
             }
-            src_y        = mDstBuf.data();
+            src_y = mDstBuf.data();
             src_stride_y = width;
-            src_u        = mDstBuf.data() + dstFrameSize;
+            src_u = mDstBuf.data() + dstFrameSize;
             src_stride_u = width >> 1;
-            src_v        = mDstBuf.data() + dstFrameSize + dstFrameSize / 4;
+            src_v = mDstBuf.data() + dstFrameSize + dstFrameSize / 4;
             src_stride_v = width >> 1;
-            dst_y        = img;
+            dst_y = img;
             dst_stride_y = width;
 
-            uint8_t *dst_uv        = dst_y + dstFrameSize;
-            int      dst_stride_uv = width;
+            uint8_t *dst_uv = dst_y + dstFrameSize;
+            int dst_stride_uv = width;
             if (int ret = libyuv::I420ToNV12(src_y, src_stride_y, src_u, src_stride_u, src_v,
                                              src_stride_v, dst_y, dst_stride_y, dst_uv,
                                              dst_stride_uv, width, height)) {
