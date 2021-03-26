@@ -136,7 +136,7 @@ Sensor::~Sensor() {
 }
 
 status_t Sensor::startUp() {
-    ALOGVV(LOG_TAG "%s: E", __FUNCTION__);
+    ALOGI(LOG_TAG "%s: E", __FUNCTION__);
 
     int res;
     mCapturedBuffers = NULL;
@@ -147,7 +147,7 @@ status_t Sensor::startUp() {
         ALOGE(LOG_TAG "%s: Failed to get gralloc module: %d", __FUNCTION__, ret);
     }
     m_major_version = (module->module_api_version >> 8) & 0xff;
-    ALOGVV(LOG_TAG " m_major_version[%d]", m_major_version);
+    ALOGI(LOG_TAG " m_major_version[%d]", m_major_version);
 
     res = run("Sensor", ANDROID_PRIORITY_URGENT_DISPLAY);
 

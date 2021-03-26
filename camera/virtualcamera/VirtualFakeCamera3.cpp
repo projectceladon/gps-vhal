@@ -146,7 +146,7 @@ void VirtualFakeCamera3::clearLastBuffer(char *fbuffer, int width, int height) {
 }
 
 status_t VirtualFakeCamera3::connectCamera(hw_device_t **device) {
-    ALOGVV(LOG_TAG "%s: E", __FUNCTION__);
+    ALOGI(LOG_TAG "%s: E", __FUNCTION__);
     Mutex::Autolock l(mLock);
     status_t res;
 
@@ -155,7 +155,7 @@ status_t VirtualFakeCamera3::connectCamera(hw_device_t **device) {
     uint32_t *cmd = &mCMD;
 
     mSocketfd = gVirtualCameraFactory.getSocketFd();
-    ALOGV(LOG_TAG "%s: CSST: mSocketfd: %d", __FUNCTION__, mSocketfd);
+    ALOGI(LOG_TAG "%s: CSST: mSocketfd: %d", __FUNCTION__, mSocketfd);
     if (mSocketfd > 0) {
         if ((sendSize = send(mSocketfd, cmd, sizeof(cmd), 0) < 0)) {
             ALOGE(LOG_TAG "%s: Command CMD_OPEN_CAMERA send fail. sendSize: %d, err %s ",
@@ -200,7 +200,7 @@ status_t VirtualFakeCamera3::connectCamera(hw_device_t **device) {
 }
 
 status_t VirtualFakeCamera3::closeCamera() {
-    ALOGVV(LOG_TAG " %s: E ", __FUNCTION__);
+    ALOGI(LOG_TAG " %s: E ", __FUNCTION__);
     status_t res;
 
     int sendSize = 0;
@@ -260,7 +260,7 @@ status_t VirtualFakeCamera3::closeCamera() {
 
     ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
     char *fbuffer = (char *)handle->clientBuf[handle->clientRevCount % 1].buffer;
-    ALOGV(LOG_TAG " %s: clearing buffer[%d]", __FUNCTION__, handle->clientRevCount);
+    ALOGI(LOG_TAG " %s: clearing buffer[%d]", __FUNCTION__, handle->clientRevCount);
     clearLastBuffer(fbuffer, 640, 480);
 
     return VirtualCamera3::closeCamera();
@@ -278,7 +278,6 @@ status_t VirtualFakeCamera3::getCameraInfo(struct camera_info *info) {
 
 status_t VirtualFakeCamera3::configureStreams(camera3_stream_configuration *streamList) {
     Mutex::Autolock l(mLock);
-    ALOGV("%s: %d streams", __FUNCTION__, streamList->num_streams);
 
     if (mStatus != STATUS_OPEN && mStatus != STATUS_READY) {
         ALOGE("%s: Cannot configure streams in state %d", __FUNCTION__, mStatus);
@@ -293,6 +292,7 @@ status_t VirtualFakeCamera3::configureStreams(camera3_stream_configuration *stre
         return BAD_VALUE;
     }
 
+    ALOGI("%s: %d streams", __FUNCTION__, streamList->num_streams);
     if (streamList->streams == NULL) {
         ALOGE("%s: NULL stream list", __FUNCTION__);
         return BAD_VALUE;
@@ -312,7 +312,7 @@ status_t VirtualFakeCamera3::configureStreams(camera3_stream_configuration *stre
             return BAD_VALUE;
         }
 
-        ALOGV(
+        ALOGI(
             " %s: Stream %p (id %zu), type %d, usage 0x%x, format 0x%x "
             "width %d, height %d",
             __FUNCTION__, newStream, i, newStream->stream_type, newStream->usage, newStream->format,
