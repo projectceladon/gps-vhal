@@ -93,7 +93,7 @@ VirtualCameraFactory::VirtualCameraFactory()
         createFakeCamera(/* backCamera */ false);
     }
 
-    ALOGE("%d cameras are being virtual. %d of them are fake cameras.", mVirtualCameraNum,
+    ALOGI("%d cameras are being virtual. %d of them are fake cameras.", mVirtualCameraNum,
           mFakeCameraNum);
 
     // Create hotplug thread.
@@ -140,7 +140,7 @@ VirtualCameraFactory::~VirtualCameraFactory() {
 }
 
 bool VirtualCameraFactory::createSocketServer() {
-    ALOGV("%s: Start to create socket server.", __FUNCTION__);
+    ALOGI("%s: Start to create socket server.", __FUNCTION__);
 
     char buf[PROPERTY_VALUE_MAX] = {
         '\0',
@@ -156,7 +156,7 @@ bool VirtualCameraFactory::createSocketServer() {
 }
 
 void VirtualCameraFactory::cameraClientConnect(int socketFd) {
-    ALOGV("%s socketFd = %d", __FUNCTION__, socketFd);
+    ALOGI("%s socketFd = %d", __FUNCTION__, socketFd);
     std::vector<RemoteCameraInfo> remoteCameras;
 
     mRemoteClient.setCameraFD(socketFd);
@@ -175,7 +175,7 @@ void VirtualCameraFactory::cameraClientConnect(int socketFd) {
 }
 
 void VirtualCameraFactory::cameraClientDisconnect(int socketFd) {
-    ALOGV("%s socketFd = %d", __FUNCTION__, socketFd);
+    ALOGI("%s socketFd = %d", __FUNCTION__, socketFd);
     mRemoteClient.cleanCameraFD(socketFd);
 
     // Clean remote camera socket fd.
@@ -236,7 +236,7 @@ int VirtualCameraFactory::trySwitchRemoteCamera(int curCameraId) {
  *****************************************************************************/
 
 int VirtualCameraFactory::cameraDeviceOpen(int cameraId, hw_device_t **device) {
-    ALOGV("%s: id = %d", __FUNCTION__, cameraId);
+    ALOGI("%s: id = %d", __FUNCTION__, cameraId);
 
     *device = nullptr;
 
@@ -256,7 +256,7 @@ int VirtualCameraFactory::cameraDeviceOpen(int cameraId, hw_device_t **device) {
 }
 
 int VirtualCameraFactory::getCameraInfo(int cameraId, struct camera_info *info) {
-    ALOGV("%s: id = %d", __FUNCTION__, cameraId);
+    ALOGI("%s: id = %d", __FUNCTION__, cameraId);
 
     if (!isConstructedOK()) {
         ALOGE("%s: VirtualCameraFactory has failed to initialize", __FUNCTION__);
