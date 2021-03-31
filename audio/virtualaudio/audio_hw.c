@@ -52,9 +52,9 @@
 
 enum
 {
-    CMD_OPEN = 0xA4, // Magic number
-    CMD_CLOSE = 0xA5,
-    CMD_DATA = 0xA6
+    CMD_OPEN = 0,
+    CMD_CLOSE = 1,
+    CMD_DATA = 2
 };
 
 enum
