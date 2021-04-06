@@ -531,6 +531,9 @@ void Sensor::captureRGBA(uint8_t *img, uint32_t gain, uint32_t width, uint32_t h
         destPrevBufSize = FRAME_SIZE_480P;
     }
 
+    // Initialize to the size based on resolution.
+    out_size = destPrevBufSize;
+
     if (gIsInFrameH264) {
         if (handle->clientBuf[handle->clientRevCount % 1].decoded) {
             // Note: bufData already assigned in the function start
@@ -781,6 +784,9 @@ void Sensor::captureNV12(uint8_t *img, uint32_t gain, uint32_t width, uint32_t h
         // TODO: adjust default
         mDstBufSize = FRAME_SIZE_480P;
     }
+
+    // Initialize to the size based on resolution.
+    out_size = mDstBufSize;
 
     if (gIsInFrameH264) {
         if (handle->clientBuf[handle->clientRevCount % 1].decoded) {
