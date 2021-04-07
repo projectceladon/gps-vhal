@@ -24,6 +24,9 @@
 #define ALOGVV(...) ((void)0)
 #endif
 
+#define MAX_DEVICE_NAME_SIZE 21
+
+#include <cutils/properties.h>
 #include <vector>
 #include <mutex>
 #include "CGCodec.h"
@@ -168,6 +171,11 @@ static enum AVPixelFormat get_hw_format(AVCodecContext *ctx, const enum AVPixelF
 
 HWAccelContext::HWAccelContext(const AVCodec *decoder, AVCodecContext *avcodec_ctx,
                                const char *device_name, int extra_frames) {
+    char *dev_dri = NULL;
+    const char *device_prefix = "/dev/dri/renderD";
+    char device[MAX_DEVICE_NAME_SIZE] = {'\0'};
+    char prop_val[PROPERTY_VALUE_MAX] = {'\0'};
+
     if (!decoder || !avcodec_ctx || !device_name || extra_frames < 0) {
         ALOGW("Invalid parameters for hw accel context.\n");
         return;
@@ -199,7 +207,13 @@ HWAccelContext::HWAccelContext(const AVCodec *decoder, AVCodecContext *avcodec_c
     avcodec_ctx->extra_hw_frames = extra_frames;
     avcodec_ctx->hwaccel_flags |= AV_HWACCEL_FLAG_ALLOW_PROFILE_MISMATCH;
 
-    if ((av_hwdevice_ctx_create(&m_hw_dev_ctx, type, NULL, NULL, 0)) < 0) {
+    property_get("ro.acg.rnode", prop_val, "0");
+    int count = snprintf(device, sizeof(device), "%s%d", device_prefix, 128 + atoi(prop_val));
+    if (count < 0 || count > MAX_DEVICE_NAME_SIZE) {
+        strcpy(device, "/dev/dri/renderD128");
+    }
+    ALOGI("%s - device: %s\n", __FUNCTION__, device);
+    if ((av_hwdevice_ctx_create(&m_hw_dev_ctx, type, device, NULL, 0)) < 0) {
         ALOGW("Failed to create specified HW device.\n");
         return;
     }
