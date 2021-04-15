@@ -403,7 +403,7 @@ bool Sensor::threadLoop() {
 
     ALOGVV("Sensor Thread stage X :4");
     ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
-    ALOGI("Frame #%zu cycle took %d ms, target %d ms", handle->decodedFrameNo,
+    ALOGVV("Frame #%zu cycle took %d ms, target %d ms", handle->decodedFrameNo,
           (int)(workDoneRealTime - startRealTime) / 1000000, (int)(frameDuration / 1000000));
     return true;
 };
@@ -488,7 +488,7 @@ bool Sensor::getNV12Frames(uint8_t *out_buf, int *out_size,
             ALOGVV("%s frames are decoded", __func__);
             break;
         } else if (retry_count++ <= maxRetryCount) {  // decoded frames are not ready
-            ALOGE("%s retry #%zu get_decoded_frame() not ready, lets wait for %zums", __func__,
+            ALOGVV("%s retry #%zu get_decoded_frame() not ready, lets wait for %zums", __func__,
                   retry_count, size_t(timeout_ms.count()));
             std::this_thread::sleep_for(timeout_ms);
             continue;
@@ -691,7 +691,7 @@ void Sensor::captureRGBA(uint8_t *img, uint32_t gain, uint32_t width, uint32_t h
         }
     }
 
-    ALOGI(" %s: Done with converion into img[%p]", __FUNCTION__, img);
+    ALOGVV(" %s: Done with converion into img[%p]", __FUNCTION__, img);
 
 // Debug point
 #if 0
