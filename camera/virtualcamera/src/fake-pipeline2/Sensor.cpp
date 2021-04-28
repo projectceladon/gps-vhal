@@ -250,6 +250,7 @@ bool Sensor::threadLoop() {
     uint32_t gain;
     Buffers *nextBuffers;
     uint32_t frameNumber;
+    bool needJpeg = false;
     ALOGVV("Sensor Thread stage E :1");
     SensorListener *listener = nullptr;
     {
@@ -351,23 +352,28 @@ bool Sensor::threadLoop() {
                         // Add auxillary buffer of the right
                         // size Assumes only one BLOB (JPEG)
                         // buffer in mNextCapturedBuffers
-                        StreamBuffer bAux;
+                        StreamBuffer bAux = {};
                         bAux.streamId = 0;
                         bAux.width = b.width;
                         bAux.height = b.height;
                         bAux.format =
-                            HAL_PIXEL_FORMAT_RGBA_8888;  // HAL_PIXEL_FORMAT_YCbCr_420_888;
+                            HAL_PIXEL_FORMAT_YCbCr_420_888;
                         bAux.stride = b.width;
                         bAux.buffer = nullptr;
-                        // TODO: Reuse these
                         bAux.img = new uint8_t[b.width * b.height * 3];
+                        needJpeg = true;
                         mNextCapturedBuffers->push_back(bAux);
                     } else {
                         captureDepthCloud(b.img);
                     }
                     break;
                 case HAL_PIXEL_FORMAT_YCbCr_420_888:
-                    captureNV12(b.img, gain, b.width, b.height);
+                    if (!needJpeg) {
+                        captureNV12(b.img, gain, b.width, b.height);
+                    } else {
+                        needJpeg = false;
+                        captureJPEG(b.img, gain, b.width, b.height);
+                    }
                     break;
                 case HAL_PIXEL_FORMAT_YV12:
                     // TODO:
@@ -757,7 +763,7 @@ void Sensor::saveNV21(uint8_t *img, uint32_t size) {
 }
 
 void Sensor::captureNV12(uint8_t *img, uint32_t gain, uint32_t width, uint32_t height) {
-    ALOGVV(LOG_TAG " %s E", __FUNCTION__);
+    ALOGVV(LOG_TAG "%s: E", __FUNCTION__);
 
     ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
     uint8_t *bufData = handle->clientBuf[handle->clientRevCount % 1].buffer;
@@ -965,6 +971,230 @@ void Sensor::captureNV12(uint8_t *img, uint32_t gain, uint32_t width, uint32_t h
     }
 #endif
     ALOGI(LOG_TAG " %s: Captured NV12 Image sucessfully!!! ", __FUNCTION__);
+}
+
+void Sensor::captureJPEG(uint8_t *img, uint32_t gain, uint32_t width, uint32_t height) {
+    ALOGVV("%s: E", __FUNCTION__);
+
+    ClientVideoBuffer *handle = ClientVideoBuffer::getClientInstance();
+    uint8_t *bufData = handle->clientBuf[handle->clientRevCount % 1].buffer;
+
+    int src_size = mSrcWidth * mSrcHeight;
+    int dstFrameSize = width * height;
+
+    int out_size;
+
+    if (!gIsInFrameI420 && !gIsInFrameH264) {
+	ALOGE("%s Exit - only H264, I420 input frames supported", __FUNCTION__);
+	return;
+    }
+
+    //TODO: handle other resolutions as required
+    if (width == 320 && height == 240) {
+        mDstJpegBufSize = FRAME_SIZE_240P;
+    } else if (width == 640 && height == 480) {
+        mDstJpegBufSize = FRAME_SIZE_480P;
+    } else {
+        //TODO: adjust default
+        mDstJpegBufSize = FRAME_SIZE_480P;
+    }
+
+    //Initialize to the size based on resolution.
+    out_size = mDstJpegBufSize;
+
+    if (gIsInFrameH264) {
+        if (handle->clientBuf[handle->clientRevCount % 1].decoded) {
+	   //Note: bufData already assigned in the function start
+	   ALOGVV("%s - Already Decoded", __FUNCTION__);
+	   out_size = mDstJpegBufSize;
+	} else {
+	   getNV12Frames(bufData, &out_size);
+	   handle->clientBuf[handle->clientRevCount % 1].decoded = true;
+	   ALOGVV("%s - getNV12Framesout_size: %d\n", __func__, out_size);
+	   std::unique_lock<std::mutex> ulock(client_buf_mutex);
+	   handle->decodedFrameNo++;
+	   ALOGVV("%s Decoded frame #[%zd]", __FUNCTION__, handle->decodedFrameNo);
+	   ulock.unlock();
+	}
+    }
+
+    //For default resolution 640x480p
+    if (width == (uint32_t)mSrcWidth && height == (uint32_t)mSrcHeight) {
+	//For I420 input
+        if (gIsInFrameI420) {
+            ALOGVV(LOG_TAG "%s: I420 input without scaling required Size = %dx%d for JPEG conversion",
+			    __FUNCTION__, width, height);
+
+	    const uint8_t *src_y = bufData;
+	    int src_stride_y = mSrcWidth;
+	    const uint8_t *src_u = bufData + src_size;
+	    int src_stride_u = mSrcWidth >> 1;
+	    const uint8_t *src_v = bufData + src_size + src_size / 4;
+	    int src_stride_v = mSrcWidth >> 1;
+
+	    uint8_t *dst_y = img;
+	    int dst_stride_y = width;
+	    uint8_t *dst_vu = dst_y + src_size;
+	    int dst_stride_vu = width;
+
+	    if (int ret = libyuv::I420ToNV21(src_y, src_stride_y, src_u, src_stride_u, src_v,
+				             src_stride_v, dst_y, dst_stride_y, dst_vu,
+					     dst_stride_vu, width, height)) {
+	    }
+        //For NV12 input
+	} else {
+	    ALOGVV(LOG_TAG "%s: NV12 to NV21 conversion for JPEG conversion: Size = %dx%d",
+			   __FUNCTION__, width, height);
+
+	    const uint8_t *src_y = bufData;
+	    int src_stride_y = mSrcWidth;
+	    const uint8_t *src_uv = bufData + src_size;
+	    int src_stride_uv = mSrcWidth;
+
+	    uint8_t *dst_y = mDstJpegBuf.data();
+	    int dst_stride_y = mSrcWidth;
+	    uint8_t *dst_u = mDstJpegBuf.data() + src_size;
+	    int dst_stride_u = mSrcWidth >> 1;
+	    uint8_t *dst_v = mDstJpegBuf.data() + src_size + src_size / 4;
+	    int dst_stride_v = mSrcWidth >> 1;
+
+	    if (int ret = libyuv::NV12ToI420(src_y, src_stride_y, src_uv, src_stride_uv,
+				             dst_y,dst_stride_y, dst_u, dst_stride_u, dst_v, dst_stride_v,
+					     mSrcWidth, mSrcHeight)) {
+	    }
+
+	    src_y =mDstJpegBuf.data();
+	    src_stride_y = mSrcWidth;
+	    uint8_t *src_u = mDstJpegBuf.data() + src_size;
+	    int src_stride_u = src_stride_y >> 1;
+	    const uint8_t *src_v = mDstJpegBuf.data() + src_size + src_size / 4;
+	    int src_stride_v = src_stride_y >> 1;
+
+	    dst_y = img;
+	    dst_stride_y = width;
+	    uint8_t *dst_vu = dst_y + dstFrameSize;
+	    int dst_stride_vu = width;
+
+	    if (int ret = libyuv::I420ToNV21(src_y, src_stride_y, src_u, src_stride_u, src_v,
+				             src_stride_v, dst_y, dst_stride_y, dst_vu,
+					     dst_stride_vu, width, height)) {
+	    }
+        }
+    //For lower resoltuions like 320x240p
+    } else {
+	//For I420 input
+        if (gIsInFrameI420) {
+	    ALOGVV(LOG_TAG "%s: I420 with scaling: Size = %dx%d for JPEG conversion",
+			    __FUNCTION__, width, height);
+
+	    const uint8_t *src_y = bufData;
+	    int src_stride_y = mSrcWidth;
+	    const uint8_t *src_u = bufData + src_size;
+	    int src_stride_u = src_stride_y >> 1;
+	    const uint8_t *src_v = bufData + src_size + src_size / 4;
+	    int src_stride_v = src_stride_y >> 1;
+	    int src_width = mSrcWidth;
+	    int src_height = mSrcHeight;
+
+	    uint8_t *dst_y = mDstJpegBuf.data();
+	    int dst_stride_y = width;
+	    uint8_t *dst_u = mDstJpegBuf.data() + dstFrameSize;
+	    int dst_stride_u = width >> 1;
+	    uint8_t *dst_v = mDstJpegBuf.data() + dstFrameSize + dstFrameSize / 4;
+	    int dst_stride_v = width >> 1;
+	    int dst_width = width;
+	    int dst_height = height;
+	    auto filtering = libyuv::kFilterNone;
+
+	    if (int ret = libyuv::I420Scale(src_y, src_stride_y, src_u, src_stride_u, src_v,
+				            src_stride_v, src_width, src_height, dst_y,
+					    dst_stride_y, dst_u, dst_stride_u, dst_v,
+					    dst_stride_v,dst_width, dst_height, filtering)) {
+	    }
+
+	    ALOGVV("%s: I420 Scaling done for JPEG conversion", __FUNCTION__);
+
+	    src_y = mDstJpegBuf.data();
+	    src_stride_y = width;
+	    src_u = mDstJpegBuf.data() + dstFrameSize;
+	    src_stride_u = width >> 1;
+	    src_v = mDstJpegBuf.data() + dstFrameSize + dstFrameSize / 4;
+	    src_stride_v = width >> 1;
+	    dst_y = img;
+	    dst_stride_y = width;
+
+	    uint8_t *dst_vu = dst_y + width * height;
+	    int dst_stride_vu = width;
+
+	    if (int ret = libyuv::I420ToNV21(src_y, src_stride_y, src_u, src_stride_u, src_v,
+				             src_stride_v, dst_y, dst_stride_y,
+					     dst_vu, dst_stride_vu, width, height)) {
+            }
+	//For NV12 input
+	} else {
+	    ALOGVV(LOG_TAG "%s: NV12 input with scaling Size = %dx%d for JPEG conversion", __FUNCTION__, width, height);
+
+	    const uint8_t *src_y = bufData;
+	    int src_stride_y = mSrcWidth;
+	    const uint8_t *src_uv = bufData + src_size;
+	    int src_stride_uv = mSrcWidth;
+
+	    uint8_t *dst_y = mDstJpegTempBuf.data();
+	    int dst_stride_y = mSrcWidth;
+	    uint8_t *dst_u = mDstJpegTempBuf.data() + src_size;
+	    int dst_stride_u = mSrcWidth >> 1;
+	    uint8_t *dst_v = mDstJpegTempBuf.data() + src_size + src_size / 4;
+	    int dst_stride_v = mSrcWidth >> 1;
+
+	    if (int ret = libyuv::NV12ToI420(src_y, src_stride_y, src_uv, src_stride_uv, dst_y,
+					     dst_stride_y, dst_u, dst_stride_u, dst_v, dst_stride_v,
+				             mSrcWidth, mSrcHeight)) {
+	    }
+
+	    src_y = mDstJpegTempBuf.data();
+	    src_stride_y = mSrcWidth;
+	    uint8_t *src_u = mDstJpegTempBuf.data() + src_size;
+	    int src_stride_u = src_stride_y >> 1;
+	    const uint8_t *src_v = mDstJpegTempBuf.data() + src_size + src_size / 4;
+	    int src_stride_v = src_stride_y >> 1;
+	    int src_width = mSrcWidth;
+	    int src_height = mSrcHeight;
+
+	    dst_y = mDstJpegBuf.data();
+	    dst_stride_y = width;
+	    dst_u = mDstJpegBuf.data() + dstFrameSize;
+	    dst_stride_u = width >> 1;
+	    dst_v = mDstJpegBuf.data() + dstFrameSize + dstFrameSize / 4;
+	    dst_stride_v = width >> 1;
+	    int dst_width = width;
+	    int dst_height = height;
+	    auto filtering = libyuv::kFilterNone;
+
+	    if (int ret = libyuv::I420Scale(src_y, src_stride_y, src_u, src_stride_u, src_v,
+					    src_stride_v, src_width, src_height, dst_y,
+					    dst_stride_y, dst_u, dst_stride_u, dst_v, dst_stride_v,
+					    dst_width, dst_height, filtering)) {
+	    }
+
+	    src_y = mDstJpegBuf.data();
+	    src_stride_y = width;
+	    src_u = mDstJpegBuf.data() + dstFrameSize;
+	    src_stride_u = width >> 1;
+	    src_v = mDstJpegBuf.data() + dstFrameSize + dstFrameSize / 4;
+	    src_stride_v = width >> 1;
+
+	    dst_y = img;
+	    dst_stride_y = width;
+	    uint8_t *dst_vu = dst_y + dstFrameSize;
+	    int dst_stride_vu = width;
+
+	    if (int ret = libyuv::I420ToNV21(src_y, src_stride_y, src_u, src_stride_u, src_v,
+				             src_stride_v, dst_y, dst_stride_y, dst_vu,
+					     dst_stride_vu, width, height)) {
+	    }
+	}
+    }
+    ALOGVV("%s: Successfully Converted to NV21 for JPEG Capture!!!", __FUNCTION__);
 }
 
 void Sensor::captureDepth(uint8_t *img, uint32_t gain, uint32_t width, uint32_t height) {

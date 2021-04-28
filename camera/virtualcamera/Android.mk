@@ -177,6 +177,50 @@ LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_EXPORT_C_INCLUDES)
 
 include $(BUILD_SHARED_LIBRARY)
 
-# Build all subdirectories #####################################################
-include $(call all-makefiles-under,$(LOCAL_PATH))
+#####################################################
+
+include $(CLEAR_VARS)
+
+################ Build JPEG Library #################
+
+LOCAL_VENDOR_MODULE := true
+LOCAL_MULTILIB := 64
+
+jpeg_module_relative_path := hw
+jpeg_cflags := -fno-short-enums -DREMOTE_HARDWARE
+jpeg_cflags += -Wno-unused-parameter
+LOCAL_CPPFLAGS += -std=c++17
+jpeg_clang_flags += -Wno-c++11-narrowing
+jpeg_shared_libraries := \
+    libcutils \
+    libexif \
+    libjpeg \
+    liblog \
+
+jpeg_c_includes := external/libjpeg-turbo \
+                   external/libexif \
+                   frameworks/native/include \
+	           $(LOCAL_PATH)/include \
+	           $(LOCAL_PATH)/include/jpeg-stub \
+
+jpeg_src := \
+    src/jpeg-stub/Compressor.cpp \
+    src/jpeg-stub/JpegStub.cpp \
+
+
+LOCAL_MODULE_RELATIVE_PATH := ${jpeg_module_relative_path}
+LOCAL_CFLAGS += ${jpeg_cflags}
+LOCAL_CLANG_CFLAGS += ${jpeg_clangflags}
+
+
+LOCAL_SHARED_LIBRARIES := ${jpeg_shared_libraries}
+LOCAL_C_INCLUDES += ${jpeg_c_includes}
+LOCAL_SRC_FILES := ${jpeg_src}
+
+LOCAL_MODULE := camera.$(TARGET_PRODUCT).jpeg
+
+include $(BUILD_SHARED_LIBRARY)
+
+######################################################
+
 endif # TARGET_USE_CAMERA_VHAL
