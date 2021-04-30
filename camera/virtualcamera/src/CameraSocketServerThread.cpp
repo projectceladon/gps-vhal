@@ -237,12 +237,12 @@ bool CameraSocketServerThread::threadLoop() {
                         if ((size = recv(mClientFd, (char *)mSocketBuffer.data(), recv_frame_size,
                                          MSG_WAITALL)) > 0) {
                             mSocketBufferSize = recv_frame_size;
-                            ALOGI("%s [H264] Camera session state: %s", __func__,
+                            ALOGVV("%s [H264] Camera session state: %s", __func__,
                                   kCameraSessionStateNames.at(mCameraSessionState).c_str());
                             switch (mCameraSessionState) {
                                 case CameraSessionState::kCameraOpened:
                                     mCameraSessionState = CameraSessionState::kDecodingStarted;
-                                    ALOGI("%s [H264] Decoding started now.", __func__);
+                                    ALOGVV("%s [H264] Decoding started now.", __func__);
                                 case CameraSessionState::kDecodingStarted:
                                     mVideoDecoder->decode(mSocketBuffer.data(), mSocketBufferSize);
                                     handle->clientRevCount++;
@@ -253,10 +253,10 @@ bool CameraSocketServerThread::threadLoop() {
                                     mVideoDecoder->flush_decoder();
                                     mVideoDecoder->destroy();
                                     mCameraSessionState = CameraSessionState::kDecodingStopped;
-                                    ALOGI("%s [H264] Decoding stopped now.", __func__);
+                                    ALOGVV("%s [H264] Decoding stopped now.", __func__);
                                     break;
                                 case CameraSessionState::kDecodingStopped:
-                                    ALOGI("%s [H264] Decoding is already stopped, skip the packets",
+                                    ALOGVV("%s [H264] Decoding is already stopped, skip the packets",
                                           __func__);
                                 default:
                                     ALOGE("%s [H264] Invalid Camera session state!", __func__);

@@ -658,13 +658,13 @@ const camera_metadata_t *VirtualFakeCamera3::constructDefaultRequestSettings(int
 
     /** android.jpeg */
     if (hasCapability(BACKWARD_COMPATIBLE)) {
-        static const uint8_t jpegQuality = 80;
+        static const uint8_t jpegQuality = 95;
         settings.update(ANDROID_JPEG_QUALITY, &jpegQuality, 1);
 
         static const int32_t thumbnailSize[2] = {320, 240};
         settings.update(ANDROID_JPEG_THUMBNAIL_SIZE, thumbnailSize, 2);
 
-        static const uint8_t thumbnailQuality = 80;
+        static const uint8_t thumbnailQuality = 95;
         settings.update(ANDROID_JPEG_THUMBNAIL_QUALITY, &thumbnailQuality, 1);
 
         static const double gpsCoordinates[3] = {0, 0, 0};
@@ -2662,7 +2662,7 @@ bool VirtualFakeCamera3::ReadoutThread::threadLoop() {
             if (mJpegWaiting) {
                 // This shouldn't happen, because processCaptureRequest should
                 // be stalling until JPEG compressor is free.
-                ALOGE("%s: Already processing a JPEG!", __FUNCTION__);
+                ALOGI("%s: Already processing a JPEG!", __FUNCTION__);
                 goodBuffer = false;
             }
             if (goodBuffer) {

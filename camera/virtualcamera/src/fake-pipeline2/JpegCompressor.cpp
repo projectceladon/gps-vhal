@@ -170,6 +170,12 @@ status_t JpegCompressor::compress() {
                                         jpegQuality, exifData);
     nV21JpegCompressor.getCompressedImage((void *)mJpegBuffer.img);
 
+// TODO: Need to pass the jpeg header properly.
+// JPEG compression would work even without
+// this header since app doesn't require it.
+// But Android framework expect this header to
+// be passed along with image.
+#if 0
     // Refer to /hardware/libhardware/include/hardware/camera3.h
     // Transport header for compressed JPEG buffers in output streams.
     camera3_jpeg_blob_t jpeg_blob;
@@ -178,6 +184,7 @@ status_t JpegCompressor::compress() {
     jpeg_blob.jpeg_size = nV21JpegCompressor.getCompressedSize();
     memcpy(mJpegBuffer.img + hnd->width - sizeof(camera3_jpeg_blob_t), &jpeg_blob,
            sizeof(camera3_jpeg_blob_t));
+#endif
 
     ALOGV("%s: X:", __FUNCTION__);
     freeExifData(exifData);

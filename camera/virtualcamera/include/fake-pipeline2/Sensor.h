@@ -242,6 +242,7 @@ private:
     void captureRGBA(uint8_t *img, uint32_t gain, uint32_t width, uint32_t height);
     void captureRGB(uint8_t *img, uint32_t gain, uint32_t width, uint32_t height);
     void captureNV12(uint8_t *img, uint32_t gain, uint32_t width, uint32_t height);
+    void captureJPEG(uint8_t *img, uint32_t gain, uint32_t width, uint32_t height);
     void captureDepth(uint8_t *img, uint32_t gain, uint32_t width, uint32_t height);
     void captureDepthCloud(uint8_t *img);
     void saveNV21(uint8_t *img, uint32_t size);
@@ -260,6 +261,11 @@ private:
     uint32_t mDstBufSize = FRAME_SIZE_480P;
     std::array<uint8_t, 640 * 480 * 3 / 2> mDstTempBuf = {};
     std::array<uint8_t, 640 * 480 * 3 / 2> mDstBuf = {};
+
+    //memories for JPEG/BLOB capture usecases
+    uint32_t mDstJpegBufSize = FRAME_SIZE_480P;
+    std::array<uint8_t, 640 * 480 * 3 / 2> mDstJpegTempBuf = {};
+    std::array<uint8_t, 640 * 480 * 3 / 2> mDstJpegBuf = {};
 
     // vHAL buffer
     int mSrcWidth = 640;
