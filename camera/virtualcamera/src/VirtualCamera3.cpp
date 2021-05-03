@@ -86,6 +86,7 @@ status_t VirtualCamera3::connectCamera(hw_device_t **device) {
 
 status_t VirtualCamera3::closeCamera() {
     mStatus = STATUS_CLOSED;
+    ALOGI("%s : Camera session closed successfully!!!", __FUNCTION__);
     return NO_ERROR;
 }
 
