@@ -253,7 +253,7 @@ bool CameraSocketServerThread::threadLoop() {
                                     mVideoDecoder->flush_decoder();
                                     mVideoDecoder->destroy();
                                     mCameraSessionState = CameraSessionState::kDecodingStopped;
-                                    ALOGVV("%s [H264] Decoding stopped now.", __func__);
+                                    ALOGI("%s [H264] Decoding stopped now.", __func__);
                                     break;
                                 case CameraSessionState::kDecodingStopped:
                                     ALOGVV("%s [H264] Decoding is already stopped, skip the packets",
