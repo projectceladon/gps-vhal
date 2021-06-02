@@ -25,6 +25,7 @@
 #endif
 
 #define MAX_DEVICE_NAME_SIZE 21
+#define MAX_ALLOWED_PENDING_FRAMES 2
 
 #include <cutils/properties.h>
 #include <vector>
@@ -408,6 +409,12 @@ int CGVideoDecoder::get_decoded_frame(CGVideoFrame::Ptr cg_frame) {
     if (m_decode_ctx->decoded_frames.empty())
         return -1;
 
+    while (m_decode_ctx->decoded_frames.size() > MAX_ALLOWED_PENDING_FRAMES) {
+        auto it = m_decode_ctx->decoded_frames.begin();
+        AVFrame *frame = *it;
+        av_frame_free(&frame);
+        m_decode_ctx->decoded_frames.erase(it);
+    }
     // return the frame in the front
     auto it = m_decode_ctx->decoded_frames.begin();
     AVFrame *frame = *it;
