@@ -275,6 +275,8 @@ void GnssHwConn::gpsSocketServerThread(void* paramGnssHwConn) {
 
     if (setsockopt(gpsSocketServerFd, SOL_SOCKET, SO_REUSEADDR, &so_reuseaddr, sizeof(int)) < 0) {
         ALOGE("%s setsockopt(SO_REUSEADDR) failed. gpsSocketServerFd: %d\n", __PRETTY_FUNCTION__, gpsSocketServerFd);
+        close(gpsSocketServerFd);
+        gpsSocketServerFd = -1;
         return;
     }
     pGnssHwConn->m_gpsSocketServerFd.reset(gpsSocketServerFd);
